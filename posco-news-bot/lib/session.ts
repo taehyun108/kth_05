@@ -15,6 +15,9 @@ export interface SessionPayload {
   exp: number;
 }
 
+// 세션은 서버 상태가 없는(stateless) 서명 쿠키다 → 서버리스 인스턴스 불일치 문제 없음.
+// 단, 모든 인스턴스가 같은 SESSION_SECRET(env)을 공유해야 서명이 호환된다.
+// 운영에서 미설정이면 인스턴스마다 기본값이 같아 동작은 하나 보안상 반드시 설정할 것.
 function secret(): string {
   return process.env.SESSION_SECRET || "dev-insecure-secret-change-me";
 }

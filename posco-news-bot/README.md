@@ -39,9 +39,23 @@ ci-guard.sh       INV grep 검사 + 테스트 실행
 ## 검증
 
 ```bash
-bash ci-guard.sh                    # 파이프라인 INV grep + pytest
+bash ci-guard.sh                    # 파이프라인 INV grep + pytest (P1·P2·P4)
 npm run test:web                    # 웹(인증·API·프론트) 테스트 — node --test, 의존성 설치 불요
 ```
+
+## 발송 (P4 — 카톡·안전장치)
+
+```
+pipeline/stages/
+  kakao_format.py    validate_kakao (고정 포맷·존댓말 종결 강제, INV-10) — 유일 소스
+  s7_dispatch.py     라우터(INV-4)·안전장치(킬스위치·crisis 보류·이상감지·상한)·어댑터
+pipeline/dispatch_routes.yaml  kakao-team.enabled:false (승인 후 true), room_id_env 만 채우면 됨
+```
+
+- **INV-6 발송 정밀화**: 발행은 항상 L0로(웹·메일). **카톡은 존댓말 포맷 충족 건만** —
+  L0 추출 요약(`summary_method=extractive`)만 있는 건은 카톡 스킵 + 운영 리포트에 건수.
+- 카톡 어댑터는 인터페이스만(`KakaoAdapter`). 승인 전엔 `DisabledKakaoAdapter` — enabled:false 면
+  어댑터를 호출조차 하지 않는다(킬 스위치). 승인되면 `room_id`만 채워 실 구현체를 붙인다.
 
 ## 웹 (P3 — 프론트 + 인증)
 

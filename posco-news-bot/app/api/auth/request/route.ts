@@ -2,7 +2,7 @@
 //   응답 본문에 코드를 담지 않는다. 논스는 httpOnly 쿠키로 브라우저에 바인딩(세션 고정 방지).
 import { NextResponse } from "next/server";
 import { requestCode } from "../../../../lib/auth.ts";
-import { codeStore, NONCE_COOKIE } from "../../../../lib/store.ts";
+import { loginKV, NONCE_COOKIE } from "../../../../lib/store.ts";
 import { sendLoginCode } from "../../../../lib/mailer.ts";
 
 export const runtime = "nodejs";
@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "bad_request" }, { status: 400 });
   }
 
-  const result = requestCode(email, { store: codeStore() });
+  const result = await requestCode(email, { kv: loginKV() });
   // 자격 미달·레이트리밋이어도 존재 여부를 노출하지 않도록 동일 응답(ok)로 통일.
   if (result.ok && result.code && result.nonce) {
     await sendLoginCode(email, result.code); // 메일 발송(개발 환경에선 로그)

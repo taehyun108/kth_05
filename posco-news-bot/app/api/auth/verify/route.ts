@@ -1,7 +1,7 @@
 // POST /api/auth/verify — 코드+논스 검증 → 세션 쿠키 발급 → next 경로 반환.
 import { NextResponse } from "next/server";
 import { verifyCode } from "../../../../lib/auth.ts";
-import { codeStore, NONCE_COOKIE } from "../../../../lib/store.ts";
+import { loginKV, NONCE_COOKIE } from "../../../../lib/store.ts";
 import { signSession, COOKIE, SESSION_TTL_MS } from "../../../../lib/session.ts";
 import { parseCookies } from "../../../../lib/request.ts";
 import { safeNext } from "../../../../lib/guard.ts";
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   }
 
   const nonce = parseCookies(req.headers.get("cookie"))[NONCE_COOKIE] || "";
-  const result = verifyCode(email, code, nonce, { store: codeStore() });
+  const result = await verifyCode(email, code, nonce, { kv: loginKV() });
   if (!result.ok || !result.level) {
     return NextResponse.json({ ok: false, reason: result.reason }, { status: 401 });
   }

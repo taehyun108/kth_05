@@ -1,8 +1,12 @@
 """INV 자동 검증 — CI 필수 통과. 상세는 CLAUDE.md 불변 규칙 표 참조."""
-import json, re, subprocess, pathlib, yaml
+import json, re, subprocess, sys, pathlib, yaml
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+# validate_kakao 는 pipeline/stages/kakao_format.py 가 유일한 소스 (중복 정의 금지)
+from pipeline.stages.kakao_format import validate_kakao, posco_entities
 
 L2_ONLY = {"body", "futurem_implication", "swot_axis", "sector_impact",
            "frame", "tone_evidence", "policy_ask_hint", "fact_check_flags"}
@@ -56,31 +60,7 @@ def test_inv5_no_body_field_in_published_data():
     assert not leaked, f"INV-5/8 위반: articles.json 에 비공개 필드 {leaked}"
 
 
-# ── INV-10 카카오톡 고정 포맷 ────────────────────────────
-BANNED = re.compile(r'[\U0001F300-\U0001FAFF\u2600-\u27BF]|^[•·\-└*]|#\w|\*\*|https?://')
-POSCO_ENTITIES = ["포스코", "POSCO"]
-
-
-def validate_kakao(card: dict, body: str) -> list[str]:
-    e = []
-    for k in ("thumbnail", "title", "description", "link"):
-        if not card.get(k):
-            e.append(f"card.{k} 누락")
-    if not re.match(r'^\[[^\]]{2,12}\] \S', body):
-        e.append("[매체명] 머리말 형식 위반")
-    if "\n" in body:
-        e.append("의도적 줄바꿈")
-    if not (150 <= len(body) <= 350):
-        e.append(f"분량 이탈 {len(body)}자")
-    if BANNED.search(body):
-        e.append("금지 문자")
-    if not body.rstrip().endswith("다."):
-        e.append("존댓말 평서문 종결 아님")
-    if not any(k in body for k in POSCO_ENTITIES):
-        e.append("포스코 언급 없음")
-    return e
-
-
+# ── INV-10 카카오톡 고정 포맷 (validate_kakao 는 kakao_format.py 유일 소스) ──
 GOLDEN_CARD = {
     "thumbnail": "https://example.com/thumb.jpg",
     "title": "미·캐나다 '관세전쟁' 불똥?…산업계 '촉각'",
@@ -106,9 +86,29 @@ def test_inv10_golden_sample_passes():
     (GOLDEN_BODY.replace("있습니다.", "있음"), "명사형 종결"),
     (GOLDEN_BODY + " https://example.com", "URL 포함"),
     (GOLDEN_BODY.replace("포스코퓨처엠", "에코프로비엠"), "포스코 언급 없음"),
+    # ★반말 평서문 종결 — L0 추출 요약의 '~했다.' 계열은 카톡 미발송★
+    (GOLDEN_BODY.replace("짓고 있습니다.", "지었다."), "반말 종결 '지었다.'"),
+    (GOLDEN_BODY.replace("짓고 있습니다.", "짓고 있다."), "반말 종결 '있다.'"),
+    (GOLDEN_BODY.replace("짓고 있습니다.", "짓겠다고 밝혔다."), "반말 종결 '밝혔다.'"),
 ])
 def test_inv10_rejects_format_violations(body, reason):
     assert validate_kakao(GOLDEN_CARD, body), f"{reason} 를 걸러내지 못함"
+
+
+@pytest.mark.parametrize("tail", ["했다.", "지었다.", "있다.", "이다.", "밝혔다.", "된다.", "간다."])
+def test_inv10_rejects_plain_declarative_endings(tail):
+    """L0 추출 요약(기사 리드)은 반말 평서문으로 끝난다 — 카톡 게이트가 거부해야 한다."""
+    body = GOLDEN_BODY.rsplit("짓고 있습니다.", 1)[0] + "생산기지를 " + tail
+    errs = validate_kakao(GOLDEN_CARD, body)
+    assert any("존댓말" in e or "반말" in e for e in errs), f"'{tail}' 종결을 거부하지 못함: {errs}"
+
+
+@pytest.mark.parametrize("tail", ["짓고 있습니다.", "예정입니다.", "추진합니다.", "늘어납니다."])
+def test_inv10_accepts_polite_endings(tail):
+    """존댓말 평서문(니다.)만 종결 검사를 통과한다."""
+    body = GOLDEN_BODY.rsplit("짓고 있습니다.", 1)[0] + tail
+    errs = validate_kakao(GOLDEN_CARD, body)
+    assert not any("존댓말" in e or "반말" in e for e in errs), f"'{tail}' 를 잘못 거부: {errs}"
 
 
 def test_inv10_card_missing_field_rejected():
