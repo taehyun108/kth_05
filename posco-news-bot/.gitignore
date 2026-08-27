@@ -1,0 +1,9 @@
+cache/
+.env
+.env.local
+pipeline/state/
+__pycache__/
+node_modules/
+.next/
+raw/
+work/

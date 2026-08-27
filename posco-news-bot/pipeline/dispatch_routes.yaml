@@ -1,0 +1,73 @@
+# 발송 라우팅 — 상세는 docs/06-dispatch.md
+# ⚠️ INV-4: 모든 라우트에 filter 정의가 있어야 한다. filter 없는 라우트는 CI에서 거부된다.
+# ⚠️ 카카오 API 승인 전까지 kakao-team 은 enabled:false 로 두고 수동 발송한다.
+version: 1
+
+routes:
+  # ── 카카오톡 (유일한 카톡 라우트) ──────────────────────
+  - id: kakao-team
+    channel: kakao
+    label: "대외협력팀 오픈채팅방"
+    enabled: false                       # ★API 승인 후 true★
+    room_id_env: KAKAO_OPENLINK_ID
+    filter:                              # 트랙 무관 — 포스코 언급 여부만
+      any_of:
+        - { posco_relevance: primary }
+        - { posco_relevance: mention, impact: [high, mid] }
+    format: kakao_card_pair              # 🔒 고정 포맷 (INV-10)
+    strict_format: true                  # validate_kakao() 통과 필수
+    daily_limit: 8                       # 기사 8건 = 메시지 16개
+    overflow: drop                       # 초과분 미발송 (목록형 축약 금지)
+    burst_limit: 3
+    quiet_hours: ["22:00", "07:00"]
+    shadow_to_env: TG_CHAT_OPS           # 발송 사본 상시 전송
+    guards:
+      max_volume_ratio: 3.0              # 평소 3배 초과 시 보류
+      min_volume: 1                      # 평일 0건이면 보류
+      hold_on_crisis: true               # ★crisis 자동 발송 금지★
+      require_relevance: true            # 판정 실패 건 제외 (fail-closed)
+      summary_len: [150, 350]
+
+  # ── 텔레그램 ─────────────────────────────────────────
+  - id: tg-posco
+    channel: telegram
+    chat_id_env: TG_CHAT_POSCO
+    filter:
+      any_of:
+        - { posco_relevance: primary }
+        - { posco_relevance: mention }
+
+  - id: tg-industry
+    channel: telegram
+    chat_id_env: TG_CHAT_INDUSTRY
+    filter: { track: [battery] }
+
+  - id: tg-policy
+    channel: telegram
+    chat_id_env: TG_CHAT_POLICY
+    filter: { track: [policy, trade], sector_impact: direct }
+
+  # ── 메일 (T1~T4 전부 담는 유일한 채널) ─────────────────
+  - id: mail-daily
+    channel: mail
+    to_env: MAIL_TO_GROUP                # 사내 배포 리스트 주소 1개
+    schedule: "07:00"
+    format: daily_two_part
+    self_contained: true                 # INV-9
+    parts:
+      - id: A                            # 포스코 언론 클리핑
+        filter: { posco_relevance: [primary, mention] }
+        group_by: outlet
+      - id: B                            # 정책·통상 (포스코 미언급)
+        filter:
+          all_of:
+            - { track: [policy, trade] }
+            - { posco_relevance: none }
+            - { impact: [high, mid] }
+        group_by: track_category
+
+# 전 라우트 공통 — 발송 경로는 아래 파일을 import하지 않는다 (INV-3, INV-7)
+forbidden_imports:
+  - data/issues.json
+  - data/analysis.json
+  - data/weekly.json

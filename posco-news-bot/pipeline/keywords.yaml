@@ -1,0 +1,187 @@
+# 수집 키워드 매트릭스 — 상세 근거는 docs/01-collect.md
+# ⚠️ posco_entities 는 카카오톡 발송 게이트의 판정 사전이다. 신중히 관리할 것.
+version: 1
+
+# ─────────────────────────────────────────────────────────
+# posco_relevance 판정 사전 (INV-4 · 카톡 발송 게이트)
+# ─────────────────────────────────────────────────────────
+posco_entities:
+  holdings:      ["포스코홀딩스", "POSCO Holdings"]
+  posco-steel:   ["포스코", "포항제철소", "광양제철소", "POSCO"]
+  futurem:       ["포스코퓨처엠", "POSCO Future M", "포스코케미칼"]   # 구 사명 포함
+  international: ["포스코인터내셔널", "POSCO International"]
+  enc:           ["포스코이앤씨", "포스코건설"]
+  dx:            ["포스코DX", "포스코ICT"]
+  group:         ["포스코그룹", "포스코스틸리온", "포스코엠텍", "포스코플로우"]
+
+# 나열 언급 → none 강등 패턴 (스팸 방지)
+# 예: "국내 배터리 3사와 포스코퓨처엠 등" → mention 아님
+relevance_demote_patterns:
+  - "등\\s*(국내|주요)?\\s*\\d+사"
+  - "(3사|4사|5사)와"
+  - "\\S+,\\s*\\S+,\\s*포스코"        # 단순 나열
+  - "종목|시세|주가\\s*표"
+
+# affects_futurem 판정용 품목 사전 (법령·통상 영향도)
+futurem_products:
+  - 양극재
+  - 음극재
+  - 하드카본
+  - 인조흑연
+  - 천연흑연
+  - 전구체
+  - 리튬
+  - 니켈
+  - 코발트
+  - 실리콘음극
+
+# ─────────────────────────────────────────────────────────
+# 트랙별 키워드
+# ─────────────────────────────────────────────────────────
+tracks:
+  posco:                       # T1 — 상한 없음
+    holdings:
+      must:   ["포스코홀딩스", "POSCO Holdings"]
+      expand: ["지주사", "리튬", "아르헨티나 염호", "이차전지소재"]
+      daily_cap: null
+    posco-steel:
+      must:   ["포스코 제철", "포항제철소", "광양제철소"]
+      expand: ["열연", "후판", "탄소중립", "HyREX", "고로"]
+      daily_cap: null
+    futurem:
+      must:   ["포스코퓨처엠", "POSCO Future M"]
+      expand: ["양극재", "음극재", "하드카본", "천연흑연", "인조흑연", "전구체"]
+      daily_cap: null
+    international:
+      must:   ["포스코인터내셔널"]
+      expand: ["미얀마 가스전", "식량", "트레이딩", "구동모터코아"]
+      daily_cap: null
+    enc:
+      must:   ["포스코이앤씨"]
+      expand: ["더샵", "수주", "안전사고"]
+      daily_cap: null
+    dx:
+      must:   ["포스코DX"]
+      expand: ["스마트팩토리", "로봇자동화"]
+      daily_cap: null
+    group:
+      must:   ["포스코그룹", "포스코스틸리온", "포스코엠텍", "포스코플로우"]
+      expand: ["회장", "노조", "지배구조", "ESG", "임단협"]
+      daily_cap: null
+
+  battery:                     # T2
+    cell-kr:
+      must:   ["LG에너지솔루션", "삼성SDI", "SK온"]
+      expand: ["수주", "증설", "가동률", "ESS", "46파이", "전고체"]
+      daily_cap: 12
+    cell-global:
+      must:   ["CATL", "BYD 배터리", "EVE", "궈쉬안", "파나소닉 배터리", "Northvolt", "ACC", "PowerCo"]
+      expand: ["나트륨이온", "LFP", "셀투팩", "유럽 공장"]
+      lang:   ["ko", "en"]
+      daily_cap: 12
+    mat-kr:
+      must:   ["에코프로비엠", "엘앤에프", "코스모신소재", "대주전자재료", "한솔케미칼", "나노신소재", "더블유씨피", "SKIET"]
+      expand: ["양극재", "음극재", "실리콘음극", "전해액", "분리막", "도전재"]
+      daily_cap: 12
+    mat-global:
+      must:   ["닝보샨샨", "BTR", "푸타이라이", "Umicore", "BASF 배터리", "Novonix", "Syrah", "룽바이", "화유코발트"]
+      expand: ["흑연", "하드카본", "전구체", "삼원계", "리사이클"]
+      lang:   ["ko", "en"]
+      daily_cap: 12
+    raw:
+      must:   ["탄산리튬", "수산화리튬", "흑연 수출통제", "니켈 가격", "코발트"]
+      expand: ["염호", "광권", "정광"]
+      daily_cap: 8
+    demand:
+      must:   ["전기차 캐즘", "ESS 수주", "데이터센터 전력"]
+      expand: ["테슬라", "현대차", "AIDC"]
+      daily_cap: 10
+    tech:
+      must:   ["전고체", "나트륨이온", "리튬메탈", "건식전극", "실리콘음극", "LMR"]
+      expand: []
+      daily_cap: 8
+    equip:
+      must:   ["전극공정", "소성로", "RHK"]
+      expand: ["코팅", "물류자동화"]
+      daily_cap: 6
+
+  policy:                      # T3
+    pol-kr:
+      must:   ["K-배터리", "이차전지 특별법", "국가전략기술", "소부장 특화단지"]
+      expand: ["조특법 세액공제", "예타", "전력수급", "폐배터리"]
+      daily_cap: 10
+    pol-law:                   # 법령·행정예고
+      must:   ["입법예고", "행정예고", "시행령 개정", "고시 제정"]
+      expand: ["화학물질관리법", "산업안전보건법", "폐기물관리법", "대기환경보전법", "위험물안전관리법", "고압가스법"]
+      daily_cap: 8
+      extra_sources:
+        - type: law_open_api      # 국가법령정보센터 (인증키 필요)
+        - type: gazette           # 전자관보
+        - type: reg_portal        # 규제정보포털
+    pol-us:
+      must:   ["IRA 배터리", "45X", "30D", "인플레이션 감축법"]
+      expand: ["세액공제", "DOE 대출"]
+      lang:   ["ko", "en"]
+      daily_cap: 10
+      extra_sources:
+        - type: federal_register
+          query: "battery anode cathode critical minerals"
+    pol-eu:
+      must:   ["EU 배터리규정", "CRMA", "Net-Zero Industry Act"]
+      expand: ["탄소발자국", "디지털 배터리 여권", "재활용 의무비율"]
+      lang:   ["ko", "en"]
+      daily_cap: 10
+    pol-cn:
+      must:   ["중국 보조금", "신에너지차 정책", "GB 표준"]
+      expand: ["기술수출 제한"]
+      daily_cap: 8
+    pol-global:
+      must:   ["일본 배터리 정책", "인도네시아 니켈", "캐나다 배터리", "호주 광물"]
+      expand: ["자원 국유화", "현지화 요구", "자원안보협정"]
+      daily_cap: 8
+    pol-trend:
+      must:   ["SNE리서치", "IEA 전망", "BNEF", "배터리 시장 전망"]
+      expand: ["시장점유율", "가격 지수", "캐파 전망"]
+      daily_cap: 10
+
+  trade:                       # T4
+    trade-tariff:
+      must:   ["관세전쟁", "상호관세", "보복관세", "Section 232", "Section 301"]
+      expand: ["관세 인상", "협상 타결", "면제"]
+      lang:   ["ko", "en"]
+      daily_cap: 10
+      extra_sources: [{ type: ustr }, { type: federal_register }]
+    trade-remedy:
+      must:   ["반덤핑", "상계관세", "세이프가드", "무역위원회", "ITC 조사"]
+      expand: ["예비판정", "최종판정", "덤핑마진"]
+      daily_cap: 8
+      extra_sources: [{ type: ktc }, { type: eu_tdi }]
+    trade-export:
+      must:   ["수출통제", "엔티티리스트", "희토류 통제", "흑연 수출허가"]
+      expand: ["이중용도", "대러 제재"]
+      lang:   ["ko", "en"]
+      daily_cap: 10
+      extra_sources: [{ type: bis }]
+    trade-origin:
+      must:   ["FEOC", "원산지 검증", "USMCA", "역내 조달비율"]
+      expand: ["누적기준", "특혜관세"]
+      daily_cap: 8
+    trade-supply:
+      must:   ["공급망 실사", "UFLPA", "강제노동", "CBAM"]
+      expand: ["탄소국경조정", "배터리 여권"]
+      daily_cap: 8
+    trade-country:
+      must:   ["통상정책 기조", "국가별 관세율"]
+      expand: []
+      daily_cap: 6
+
+# ─────────────────────────────────────────────────────────
+outlet_tiers:
+  1: [연합뉴스, 조선비즈, 매일경제, 한국경제, Reuters, Bloomberg, Federal Register]
+  2: [이데일리, 전자신문, 머니투데이, 아시아경제, 뉴스토마토]
+
+negative_keywords: [테마주, 리딩방, 상한가, 급등주, 목표주가, 채용공고, 주가 전망]
+negative_patterns:
+  - "^\\[부고\\]"
+  - "^\\[포토\\]"
+  - "증권가 소식"
