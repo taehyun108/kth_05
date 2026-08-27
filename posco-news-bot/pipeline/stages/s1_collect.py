@@ -129,12 +129,23 @@ def google_news_rss(query: str, lang: str) -> list[dict[str, Any]]:
 
 # ── 수집 계획 ────────────────────────────────────────────────────────────
 
-def build_plan(keywords: dict[str, Any]) -> list[dict[str, Any]]:
-    """(track, category, keyword, lang) 쿼리 계획. must 키워드만 쿼리로 사용."""
+def build_plan(
+    keywords: dict[str, Any],
+    only_tracks: list[str] | None = None,
+    only_categories: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """(track, category, keyword, lang) 쿼리 계획. must 키워드만 쿼리로 사용.
+
+    only_tracks / only_categories 로 스모크·부분 수집 범위를 좁힐 수 있다.
+    """
     plan: list[dict[str, Any]] = []
     tracks = keywords.get("tracks") or {}
     for track, cats in tracks.items():
+        if only_tracks and track not in only_tracks:
+            continue
         for category, cfg in cats.items():
+            if only_categories and category not in only_categories:
+                continue
             langs = common.track_langs(keywords, track, cfg)
             for kw in cfg.get("must") or []:
                 for lang in langs:
@@ -149,9 +160,11 @@ def collect(
     naver_id: str | None = None,
     naver_secret: str | None = None,
     max_queries: int | None = None,
+    only_tracks: list[str] | None = None,
+    only_categories: list[str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """계획을 실행해 원시 레코드와 errors 를 반환. 소스 실패는 fail-soft."""
-    plan = build_plan(keywords)
+    plan = build_plan(keywords, only_tracks=only_tracks, only_categories=only_categories)
     if max_queries:
         plan = plan[:max_queries]
 
