@@ -34,8 +34,10 @@
 | `mention` | 포스코가 **비교군·인용**으로 언급 | 본문 1~2회, 제목엔 없음 | ✅ `impact ≥ mid` |
 | `none` | 미언급 | 계열사명 미등장 | ❌ 웹·텔레그램만 |
 
-**2단계 판정:** ① 문자열 매칭으로 후보 추출 → ② Claude가 맥락 검증
+**2단계 판정 (L0 결정론 규칙 — LLM 미사용):** ① `posco_entities` 문자열 매칭으로 후보 추출 → ② `relevance_demote_patterns` 규칙으로 강등
 → *"국내 배터리 3사와 포스코퓨처엠 등"* 같은 단순 나열, 시세표·종목 리스트 언급은 `none`으로 강등한다. 문자열만 쓰면 카톡이 스팸이 된다.
+
+> 🔒 **`posco_relevance`는 카톡 발송 게이트라 LLM에 맡기지 않는다** (CLAUDE.md 금지목록). 오직 `keywords.yaml`의 `posco_entities` + `relevance_demote_patterns`만 사용하는 결정론적 규칙이며, 판정 불가 시 `null`(fail-closed)로 두어 발송하지 않는다.
 
 #### 4.4.2 `sector_impact` (v1.0 신규)
 

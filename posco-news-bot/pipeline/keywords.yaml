@@ -3,6 +3,18 @@
 version: 1
 
 # ─────────────────────────────────────────────────────────
+# 트랙별 수집 언어 (단일 진실원천)
+#   T1 posco / T2 battery : 한국어만
+#   T3 policy / T4 trade  : 영문 포함 (해외 정책·통상 원문 커버리지)
+# 카테고리에 별도 lang 을 지정하면 그 값이 우선한다. 미지정 시 아래 트랙 기본값.
+# ─────────────────────────────────────────────────────────
+track_lang:
+  posco:   ["ko"]
+  battery: ["ko"]
+  policy:  ["ko", "en"]
+  trade:   ["ko", "en"]
+
+# ─────────────────────────────────────────────────────────
 # posco_relevance 판정 사전 (INV-4 · 카톡 발송 게이트)
 # ─────────────────────────────────────────────────────────
 posco_entities:
@@ -77,7 +89,6 @@ tracks:
     cell-global:
       must:   ["CATL", "BYD 배터리", "EVE", "궈쉬안", "파나소닉 배터리", "Northvolt", "ACC", "PowerCo"]
       expand: ["나트륨이온", "LFP", "셀투팩", "유럽 공장"]
-      lang:   ["ko", "en"]
       daily_cap: 12
     mat-kr:
       must:   ["에코프로비엠", "엘앤에프", "코스모신소재", "대주전자재료", "한솔케미칼", "나노신소재", "더블유씨피", "SKIET"]
@@ -86,7 +97,6 @@ tracks:
     mat-global:
       must:   ["닝보샨샨", "BTR", "푸타이라이", "Umicore", "BASF 배터리", "Novonix", "Syrah", "룽바이", "화유코발트"]
       expand: ["흑연", "하드카본", "전구체", "삼원계", "리사이클"]
-      lang:   ["ko", "en"]
       daily_cap: 12
     raw:
       must:   ["탄산리튬", "수산화리튬", "흑연 수출통제", "니켈 가격", "코발트"]
@@ -121,7 +131,6 @@ tracks:
     pol-us:
       must:   ["IRA 배터리", "45X", "30D", "인플레이션 감축법"]
       expand: ["세액공제", "DOE 대출"]
-      lang:   ["ko", "en"]
       daily_cap: 10
       extra_sources:
         - type: federal_register
@@ -129,7 +138,6 @@ tracks:
     pol-eu:
       must:   ["EU 배터리규정", "CRMA", "Net-Zero Industry Act"]
       expand: ["탄소발자국", "디지털 배터리 여권", "재활용 의무비율"]
-      lang:   ["ko", "en"]
       daily_cap: 10
     pol-cn:
       must:   ["중국 보조금", "신에너지차 정책", "GB 표준"]
@@ -148,7 +156,6 @@ tracks:
     trade-tariff:
       must:   ["관세전쟁", "상호관세", "보복관세", "Section 232", "Section 301"]
       expand: ["관세 인상", "협상 타결", "면제"]
-      lang:   ["ko", "en"]
       daily_cap: 10
       extra_sources: [{ type: ustr }, { type: federal_register }]
     trade-remedy:
@@ -159,7 +166,6 @@ tracks:
     trade-export:
       must:   ["수출통제", "엔티티리스트", "희토류 통제", "흑연 수출허가"]
       expand: ["이중용도", "대러 제재"]
-      lang:   ["ko", "en"]
       daily_cap: 10
       extra_sources: [{ type: bis }]
     trade-origin:
