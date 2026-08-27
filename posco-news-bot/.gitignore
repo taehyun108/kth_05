@@ -7,3 +7,7 @@ node_modules/
 .next/
 raw/
 work/
+
+# 파이프라인이 생성/커밋하는 실데이터 (Actions). 개발 시드는 *.sample.json 만 추적.
+data/*.json
+!data/*.sample.json

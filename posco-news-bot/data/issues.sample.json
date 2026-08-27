@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-08-27T07:30:00+09:00",
+  "baseline": "포스코퓨처엠",
+  "_sample": true,
+  "_note": "L2 SWOT 샘플. data/ 는 서버에서만 읽힌다(INV-8). L1 세션은 /api/issues 에서 403.",
+  "issues": [
+    {
+      "issue_id": "2026-W35-us-45x-amendment",
+      "title": "美 45X 음극재 적격비용 축소",
+      "quadrant": "T",
+      "article_ids": ["2026-08-27-d3e4f5a6b7"]
+    }
+  ]
+}

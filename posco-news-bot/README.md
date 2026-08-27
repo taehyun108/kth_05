@@ -39,8 +39,42 @@ ci-guard.sh       INV grep 검사 + 테스트 실행
 ## 검증
 
 ```bash
-bash ci-guard.sh                    # INV grep + 전체 테스트 (pytest)
+bash ci-guard.sh                    # 파이프라인 INV grep + pytest
+npm run test:web                    # 웹(인증·API·프론트) 테스트 — node --test, 의존성 설치 불요
 ```
+
+## 웹 (P3 — 프론트 + 인증)
+
+Next.js App Router. **보안·필터 로직은 `lib/*.ts`(프레임워크 비의존)** 에 있고,
+`app/`·`middleware.ts` 는 얇은 어댑터다. 그래서 `next` 설치 없이도 `node --test` 로
+핵심을 검증한다(Node 22의 TS 타입 스트리핑).
+
+```
+lib/
+  levels.ts      접근 레벨(L0/L1/L2) · rank/atLeast
+  session.ts     서명 세션 쿠키(HMAC) · 완전검증(verify)/Edge용 readClaims
+  allowlist.ts   이메일 → 레벨 (사내 도메인=L1, 허용목록=L2)
+  auth.ts        6자리 코드 수명주기(만료·5회·일회성·논스·발급제한)
+  guard.ts       requireLevel · safeNext(오픈 리다이렉트 방지)
+  fields.ts      L2_ONLY 필드 제거 (INV-8)
+  api.ts         articlesResponse(L1 필터)/issuesResponse(L2 게이트 403)
+  facets.ts      facets 필터(그룹간 AND/그룹내 OR) · visiblePills(모바일 pill 축소)
+  card.ts        카드 배지(⚙️ 규칙요약) · INV-6 optional 필드 안전화
+middleware.ts    미인증 → /login?next= 리다이렉트 (실검증은 /api/*)
+app/api/         articles·issues·analysis · auth/{request,verify,logout}
+app/             login · posco(트랙 토글+facets+카드) · layout(뷰포트)
+data/            *.sample.json (개발 시드) — 실데이터 *.json 은 .gitignore, public/ 아님
+```
+
+로컬 실행(Z2, 네트워크 필요):
+```bash
+npm install
+export SESSION_SECRET=... ALLOWED_EMAIL_DOMAINS=poscofuturem.com L2_ADMIN_EMAILS=you@…
+npm run dev        # http://localhost:3000  (코드 발송은 SMTP 미설정 시 서버 콘솔 출력)
+```
+
+> 인증 경계는 **서버**다(INV-8). L1 응답에는 L2 필드를 담지 않고(숨김이 아니라 부재),
+> 데이터는 `data/`(서버 fs)에서만 읽으며 `public/` 에 JSON 을 두지 않는다.
 
 ## P1 파이프라인 실행
 

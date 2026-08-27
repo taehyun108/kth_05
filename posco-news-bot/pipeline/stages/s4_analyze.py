@@ -200,6 +200,10 @@ CARRY_FIELDS = [
 ]
 
 # 절대 방출 금지 (INV-3/5) — 방어적 스크린
+# ⚠️ 스코프 주의: 이 스트리핑은 analyze_one 이 만드는 ★공개 articles 레코드★에만
+#    적용된다. L2(P6)가 futurem_implication·swot_axis 를 생성해
+#    private/data/analysis.json 에 쓰는 것은 별개의 경로이며 여기서 막지 않는다.
+#    L2 쓰기 경로가 절대 이 목록/함수를 재사용하지 않도록 할 것.
 FORBIDDEN_OUT = {
     "body", "futurem_implication", "swot_axis", "sector_impact", "frame",
     "tone_evidence", "policy_ask_hint", "fact_check_flags",

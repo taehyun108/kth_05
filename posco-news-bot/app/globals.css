@@ -1,0 +1,59 @@
+:root {
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --border: #e3e6ea;
+  --text: #1a1d21;
+  --muted: #6b7280;
+  --accent: #0b6bcb;
+  --proposed: #d92d20;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+  line-height: 1.5;
+}
+.wrap { max-width: 960px; margin: 0 auto; padding: 16px; }
+header.app { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+h1.title { font-size: 1.15rem; margin: 8px 0 4px; }
+
+/* 트랙/필터 pill */
+.pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.pill {
+  border: 1px solid var(--border); background: var(--card); color: var(--text);
+  border-radius: 999px; padding: 6px 12px; font-size: 0.85rem; cursor: pointer;
+}
+.pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* 카드 그리드 — 모바일 1열, 넓으면 2열 */
+.grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 720px) { .grid { grid-template-columns: 1fr 1fr; } }
+
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+.card h2 { font-size: 1rem; margin: 6px 0; }
+.card a.headline { color: var(--text); text-decoration: none; }
+.card .summary { color: var(--text); font-size: 0.92rem; }
+.card ul.bullets { margin: 6px 0; padding-left: 18px; color: var(--muted); font-size: 0.86rem; }
+.card .meta { color: var(--muted); font-size: 0.8rem; margin-top: 8px; }
+.card .topics { color: var(--accent); font-size: 0.8rem; margin-top: 4px; }
+
+/* 배지 */
+.badges { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.badge { font-size: 0.72rem; padding: 2px 7px; border-radius: 6px; border: 1px solid var(--border); background: #f0f2f5; color: #333; }
+.badge-track, .badge-category { background: #eef4fb; }
+.badge-tone-crisis { background: #fde8e8; color: #b42318; }
+.badge-tone-negative { background: #fef0e7; color: #b54708; }
+.badge-tone-positive { background: #e7f6ec; color: #067647; }
+.badge-impact-high { background: #fff3cd; color: #7a5b00; font-weight: 600; }
+.badge-stage-proposed { background: #fde8e8; color: var(--proposed); font-weight: 600; }
+.badge-stage-enacted { background: #e7f6ec; color: #067647; }
+.badge-dispute-preliminary { background: #fff3cd; color: #7a5b00; }
+.badge-rule-summary { background: #eceff3; color: #555; }
+
+.login-box { max-width: 380px; margin: 40px auto; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.login-box input { width: 100%; padding: 10px; margin: 6px 0; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; }
+.login-box button { width: 100%; padding: 10px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-size: 1rem; cursor: pointer; }
+.note { color: var(--muted); font-size: 0.82rem; }
+.err { color: #b42318; font-size: 0.85rem; }

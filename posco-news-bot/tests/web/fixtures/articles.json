@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "run_id": "fixture",
+  "articles": [
+    {
+      "id": "fx-1",
+      "title": "포스코퓨처엠 양극재 증설",
+      "track": "posco",
+      "category": "futurem",
+      "posco_relevance": "primary",
+      "summary": "증설 완료.",
+      "summary_method": "extractive",
+      "facets": ["track:posco", "cat:futurem"],
+      "futurem_implication": "L2 전용 — L1 응답에서 제거돼야 함",
+      "swot_axis": "S",
+      "sector_impact": "direct",
+      "frame": "L2 전용",
+      "tone_evidence": ["L2 전용"],
+      "policy_ask_hint": "L2 전용",
+      "fact_check_flags": [],
+      "body": "원문 전문 — 절대 클라이언트로 나가면 안 됨"
+    }
+  ]
+}

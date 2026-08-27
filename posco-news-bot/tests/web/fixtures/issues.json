@@ -1,0 +1,5 @@
+{
+  "schema_version": "1.0",
+  "baseline": "포스코퓨처엠",
+  "issues": [{ "issue_id": "fx-issue-1", "quadrant": "T", "article_ids": ["fx-1"] }]
+}
