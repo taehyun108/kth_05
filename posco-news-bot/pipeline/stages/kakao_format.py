@@ -35,19 +35,26 @@ def posco_entities() -> list[str]:
     return terms
 
 
-def validate_kakao(card: dict[str, Any], body: str, entities: list[str] | None = None) -> list[str]:
-    """고정 포맷 위반 사유 목록. 빈 리스트면 통과. (docs §4.7.3)"""
+def validate_card(card: dict[str, Any]) -> list[str]:
+    """메시지1 카드 4요소 검증."""
     e: list[str] = []
-    ents = entities if entities is not None else posco_entities()
-
-    # 메시지 1 — 카드 4요소
     for k in ("thumbnail", "title", "description", "link"):
         if not card.get(k):
             e.append(f"card.{k} 누락")
     if str(card.get("link", "")).startswith(("http://bit.ly", "https://bit.ly")):
         e.append("단축 URL")
+    return e
 
-    # 메시지 2 — 머리말·문체·분량·금지문자
+
+def validate_body(body: str, entities: list[str] | None = None) -> list[str]:
+    """메시지2 본문 검증 — 머리말·문체·분량·금지문자·존댓말 종결·포스코 언급.
+
+    L1(생성 요약)이 자체 검증에 재사용한다(카드 없이 본문만).
+    """
+    e: list[str] = []
+    ents = entities if entities is not None else posco_entities()
+    body = body or ""
+
     if not _HEAD.match(body):
         e.append("[매체명] 머리말 형식 위반")
     if "\n" in body:
@@ -66,3 +73,8 @@ def validate_kakao(card: dict[str, Any], body: str, entities: list[str] | None =
     if not any(k in body for k in ents):
         e.append("포스코 언급 없음")
     return e
+
+
+def validate_kakao(card: dict[str, Any], body: str, entities: list[str] | None = None) -> list[str]:
+    """고정 포맷 위반 사유 목록. 빈 리스트면 통과. (docs §4.7.3)"""
+    return validate_card(card) + validate_body(body, entities)
