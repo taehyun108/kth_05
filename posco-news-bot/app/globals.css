@@ -62,6 +62,20 @@ h1.title { font-size: 1.15rem; margin: 8px 0 4px; }
 .swot-T { background: #fff3cd; }
 .conf { color: var(--muted); font-size: 0.75rem; }
 
+/* 정책·분쟁 보드 매트릭스 */
+table.board { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+table.board th, table.board td { border: 1px solid var(--border); padding: 6px 8px; text-align: center; }
+table.board thead th { background: #eef4fb; }
+table.board tbody th { background: #f6f7f9; text-align: left; white-space: nowrap; }
+.badge-stage-effective { background: #e7f6ec; color: #067647; }
+.badge-stage-amended { background: #fef0e7; color: #b54708; }
+.badge-stage-discussion { background: #f0f2f5; color: #555; }
+.badge-dispute-initiated { background: #f0f2f5; color: #555; }
+.badge-dispute-final { background: #fde8e8; color: #b42318; }
+.badge-dispute-inforce { background: #fff3cd; color: #7a5b00; }
+.badge-dispute-negotiating { background: #eef4fb; color: #0b6bcb; }
+.badge-dispute-terminated { background: #e7f6ec; color: #067647; }
+
 .login-box { max-width: 380px; margin: 40px auto; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
 .login-box input { width: 100%; padding: 10px; margin: 6px 0; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; }
 .login-box button { width: 100%; padding: 10px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-size: 1rem; cursor: pointer; }

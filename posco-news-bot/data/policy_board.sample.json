@@ -1,0 +1,74 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-08-28T17:37:02.822398+09:00",
+  "_sample": true,
+  "policies": [
+    {
+      "policy_id": "us-45x",
+      "country": "US",
+      "name": "45X",
+      "issue_tags": [
+        "45X"
+      ],
+      "current_stage": "proposed",
+      "timeline": [
+        {
+          "date": "2026-08-27",
+          "stage": "proposed",
+          "article_ids": [
+            "2026-08-27-d3e4f5a6b7"
+          ],
+          "source_type": "gazette",
+          "confidence": "high"
+        }
+      ],
+      "linked_issue_id": "2026-W35-us-45x-amendment",
+      "last_updated": "2026-08-27"
+    },
+    {
+      "policy_id": "kr-이차전지-특별법",
+      "country": "KR",
+      "name": "이차전지 특별법",
+      "issue_tags": [
+        "이차전지 특별법"
+      ],
+      "current_stage": "proposed",
+      "timeline": [
+        {
+          "date": "2026-08-20",
+          "stage": "proposed",
+          "article_ids": [
+            "2026-08-20-aa11bb22cc"
+          ],
+          "source_type": "gazette",
+          "confidence": "high"
+        }
+      ],
+      "linked_issue_id": null,
+      "last_updated": "2026-08-20"
+    },
+    {
+      "policy_id": "kr-폐배터리",
+      "country": "KR",
+      "name": "폐배터리",
+      "issue_tags": [
+        "폐배터리"
+      ],
+      "current_stage": "discussion",
+      "timeline": [
+        {
+          "date": "2026-08-25",
+          "stage": "discussion",
+          "article_ids": [
+            "2026-08-25-cc33dd44ee"
+          ],
+          "source_type": "news",
+          "confidence": "low"
+        }
+      ],
+      "linked_issue_id": null,
+      "last_updated": "2026-08-25"
+    }
+  ],
+  "_note": "L1 board 축약본 — 민감 필드 제거."
+}

@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-08-28T17:37:02.822999+09:00",
+  "_sample": true,
+  "disputes": [
+    {
+      "dispute_id": "cn-kr-흑연-수출허가",
+      "imposing_country": "CN",
+      "target_country": "KR",
+      "measure_type": "흑연 수출허가",
+      "current_stage": "in_force",
+      "current_rate": null,
+      "timeline": [
+        {
+          "date": "2026-08-27",
+          "stage": "in_force",
+          "article_ids": [
+            "2026-08-27-ee55ff66aa"
+          ],
+          "source_type": "gazette",
+          "confidence": "high"
+        }
+      ],
+      "linked_issue_id": null,
+      "last_updated": "2026-08-27"
+    },
+    {
+      "dispute_id": "us-ca-관세",
+      "imposing_country": "US",
+      "target_country": "CA",
+      "measure_type": "관세",
+      "current_stage": "in_force",
+      "current_rate": "25%",
+      "timeline": [
+        {
+          "date": "2026-08-20",
+          "stage": "in_force",
+          "article_ids": [
+            "2026-08-20-ff66aa77bb"
+          ],
+          "source_type": "news",
+          "confidence": "high"
+        }
+      ],
+      "linked_issue_id": null,
+      "last_updated": "2026-08-20"
+    }
+  ],
+  "_note": "L1 board 축약본."
+}

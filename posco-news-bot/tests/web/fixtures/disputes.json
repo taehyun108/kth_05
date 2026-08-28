@@ -1,0 +1,1 @@
+{ "disputes": [ { "dispute_id": "cn-kr-graphite", "imposing_country": "CN", "target_country": "KR", "measure_type": "흑연 수출허가", "current_stage": "in_force", "affects_futurem": true, "products": ["흑연"], "timeline": [{"date":"2026-08-27","stage":"in_force","article_ids":["fx-2"]}] } ] }

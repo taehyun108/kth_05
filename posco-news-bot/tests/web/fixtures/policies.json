@@ -1,0 +1,1 @@
+{ "policies": [ { "policy_id": "us-45x", "country": "US", "name": "45X", "issue_tags": ["45X"], "current_stage": "proposed", "affects_futurem": true, "timeline": [{"date":"2026-08-27","stage":"proposed","article_ids":["fx-1"]}], "our_position": "음극재 포함 요청", "policy_ask": "적격비용 명확화" } ] }

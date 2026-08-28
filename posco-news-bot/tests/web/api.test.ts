@@ -3,7 +3,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { articlesResponse, issuesResponse, analysisResponse, weeklyResponse } from "../../lib/api.ts";
+import {
+  articlesResponse, issuesResponse, analysisResponse, weeklyResponse,
+  policiesResponse, disputesResponse,
+} from "../../lib/api.ts";
 import { L2_ONLY, filterArticlesForLevel } from "../../lib/fields.ts";
 
 const FIX = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
@@ -45,6 +48,24 @@ test("완료기준: /api/weekly 도 L2 전용 (L1 → 403, 미인증 → 401, L2
   assert.equal(weeklyResponse("L1", FIX).status, 403);
   assert.equal(weeklyResponse(null, FIX).status, 401);
   assert.equal(weeklyResponse("L2", FIX).status, 200);
+});
+
+test("완료기준: /api/policies L1 응답에 our_position·policy_ask 부재(board), L2엔 존재(full)", () => {
+  assert.equal(policiesResponse(null, FIX).status, 401);
+  const l1 = policiesResponse("L1", FIX);
+  assert.equal(l1.status, 200);
+  const p1 = (l1.body.policies as Record<string, unknown>[])[0];
+  assert.ok(!("our_position" in p1) && !("policy_ask" in p1), "L1 board에 민감 필드 누출");
+  const l2 = policiesResponse("L2", FIX);
+  const p2 = (l2.body.policies as Record<string, unknown>[])[0];
+  assert.equal(p2.our_position, "음극재 포함 요청");   // L2 full 엔 존재
+});
+
+test("완료기준: /api/disputes L1 board엔 affects/products 부재, L2 full엔 존재", () => {
+  const d1 = (disputesResponse("L1", FIX).body.disputes as Record<string, unknown>[])[0];
+  assert.ok(!("affects_futurem" in d1) && !("products" in d1), "L1 board에 affects 누출");
+  const d2 = (disputesResponse("L2", FIX).body.disputes as Record<string, unknown>[])[0];
+  assert.equal(d2.affects_futurem, true);
 });
 
 test("filterArticlesForLevel 은 원본을 변형하지 않는다(L1 사본만 제거)", () => {

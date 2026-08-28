@@ -75,11 +75,18 @@ def enforce_axes(issue: dict[str, Any], keywords: dict[str, Any] | None = None) 
     """issue['findings'] 를 규칙대로 재배치해 issue['swot'] 를 (재)생성.
 
     L2가 축을 잘못 넣어도 여기서 교정된다 — 경쟁사 강점이 S로 새지 않는다.
+    ★교정은 조용히 하지 않는다★: finding 에 L2가 제안한 축(`axis`)이 있고 규칙 결과와
+    다르면 issue['axis_corrections'] 에 {text, from, to} 를 남긴다.
+    교정률이 높다는 것은 프롬프트를 손봐야 한다는 신호다(§ swot-analyst 튜닝).
     """
     futurem, _ = _load_aliases(keywords)
     swot: dict[str, list[dict[str, Any]]] = {"S": [], "W": [], "O": [], "T": []}
+    corrections: list[dict[str, str]] = []
     for f in issue.get("findings", []):
         ax = place_finding(f, futurem)
+        proposed = f.get("axis")                      # L2가 제안한 축(있으면)
+        if proposed and proposed != ax:
+            corrections.append({"text": f.get("text", ""), "from": proposed, "to": ax})
         swot[ax].append({
             "text": f.get("text", ""),
             "evidence": f.get("evidence", []),
@@ -87,7 +94,13 @@ def enforce_axes(issue: dict[str, Any], keywords: dict[str, Any] | None = None) 
         })
     issue["swot"] = swot
     issue["baseline"] = BASELINE
+    issue["axis_corrections"] = corrections
     return issue
+
+
+def count_axis_corrections(issues: list[dict[str, Any]]) -> int:
+    """이슈 전체의 축 교정 건수 — S8 리포트/프롬프트 튜닝 신호."""
+    return sum(len(i.get("axis_corrections") or []) for i in issues)
 
 
 def validate_swot(issue: dict[str, Any], keywords: dict[str, Any] | None = None) -> list[str]:

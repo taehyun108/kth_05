@@ -25,6 +25,7 @@ if __package__ in (None, ""):
 
 from pipeline.stages import (
     common, s1_collect, s2_normalize, s3_fetch, s4_analyze, s4_l1, s5_swot, s6_publish, s7_dispatch,
+    stagers,
 )
 
 # 실패 정책 (docs §11.5)
@@ -142,8 +143,30 @@ def _s5_swot(ctx: StageContext) -> StageResult:
         existing = json.loads(issues_path.read_text(encoding="utf-8")).get("issues", [])
     issues = s5_swot.cluster(articles, existing)          # id 안정: 기존 이슈에 기사만 추가
     s5_swot.write_issues(issues, data_dir=ctx.data_dir)
+    corr = s5_swot.count_axis_corrections(issues)          # L2 축 교정 건수(프롬프트 튜닝 신호)
+    ctx.state["axis_corrections_total"] = corr
+
+    # 정책·통상 엔티티(L0 stager) → full(L2) + board(L1) 발행
+    def _load(name: str) -> list:
+        p = ctx.data_dir / f"{name}.json"
+        return json.loads(p.read_text(encoding="utf-8")).get(name, []) if p.exists() else []
+
+    policies = stagers.build_policies(articles, existing=_load("policies"))
+    disputes = stagers.build_disputes(articles, existing=_load("disputes"))
+    _write_json(ctx.data_dir / "policies.json", {"policies": policies})
+    _write_json(ctx.data_dir / "policy_board.json", {"policies": stagers.policy_board(policies)})
+    _write_json(ctx.data_dir / "disputes.json", {"disputes": disputes})
+    _write_json(ctx.data_dir / "dispute_board.json", {"disputes": stagers.dispute_board(disputes)})
+
     return StageResult("S5", "success", output_count=len(issues),
-                       artifacts=[str(issues_path)], note="clustered(L0); SWOT 텍스트는 L2")
+                       artifacts=[str(issues_path)],
+                       note=f"이슈 {len(issues)} · 정책 {len(policies)} · 분쟁 {len(disputes)} · 축 교정 {corr}건")
+
+
+def _write_json(path: Path, body: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"schema_version": "1.0", "generated_at": common.now_kst().isoformat(), **body}
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _s6_publish(ctx: StageContext) -> StageResult:
@@ -285,6 +308,10 @@ def build_report(state: dict[str, Any]) -> str:
         lines.append(line)
     # analysis_level 통계 (S6 note 또는 articles.json)
     lines.append("")
+    corr = state.get("axis_corrections_total")
+    if corr is not None:
+        flag = "  ⚠️ 프롬프트 점검 권장" if corr > 0 else ""
+        lines.append(f"  SWOT 축 교정: {corr}건 (L2 오배치를 규칙이 교정){flag}")
     lines.append(f"  발송 로그: {len(state.get('dispatch_log', []))}건 (멱등 판정 기준)")
     warnings = [f"{n}: {len(s.get('errors', []))} errors" for n, s in stages.items() if s.get("errors")]
     if warnings:

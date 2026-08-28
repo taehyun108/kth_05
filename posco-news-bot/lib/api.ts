@@ -42,3 +42,19 @@ export function weeklyResponse(level: Level | null | undefined, dir?: string): A
   const raw = readDataFile("weekly", dir);
   return { status: 200, body: raw };
 }
+
+// /api/policies — L1 이상. ★L1은 board 축약본(our_position·policy_ask 없음), L2는 full★
+export function policiesResponse(level: Level | null | undefined, dir?: string): ApiResult {
+  const g = requireLevel(level, "L1");
+  if (!g.ok) return { status: g.status, body: { error: g.status === 401 ? "unauthorized" : "forbidden" } };
+  const raw = readDataFile(level === "L2" ? "policies" : "policy_board", dir);
+  return { status: 200, body: raw };
+}
+
+// /api/disputes — L1 이상. L1은 board 축약본, L2는 full(affects·products 포함).
+export function disputesResponse(level: Level | null | undefined, dir?: string): ApiResult {
+  const g = requireLevel(level, "L1");
+  if (!g.ok) return { status: g.status, body: { error: g.status === 401 ? "unauthorized" : "forbidden" } };
+  const raw = readDataFile(level === "L2" ? "disputes" : "dispute_board", dir);
+  return { status: 200, body: raw };
+}

@@ -91,6 +91,26 @@ def test_validate_catches_competitor_strength_in_S():
     assert any("경쟁사" in e or "외부" in e for e in errs)
 
 
+def test_axis_correction_is_recorded_not_silent():
+    """L2가 CATL 원가 경쟁력을 S에 넣으면 규칙이 T로 옮기고 그 사실을 기록한다."""
+    issue = {
+        "issue_id": "corr", "baseline": "포스코퓨처엠",
+        "findings": [
+            {"subject": "CATL", "favorable": False, "axis": "S",   # L2 오배치
+             "text": "CATL의 원가 경쟁력이 강화됐습니다", "evidence": ["a1"], "confidence": "high"},
+            {"subject": "포스코퓨처엠", "favorable": True, "axis": "S",  # L2 정배치
+             "text": "포스코퓨처엠 북미 거점 보유", "evidence": ["a2"], "confidence": "high"},
+        ],
+    }
+    swot.enforce_axes(issue, KW)
+    assert len(issue["axis_corrections"]) == 1                 # 잘못된 것만 기록
+    c = issue["axis_corrections"][0]
+    assert c["from"] == "S" and c["to"] == "T"
+    assert "CATL" in c["text"]
+    assert issue["swot"]["S"][0]["text"].startswith("포스코퓨처엠")  # 정배치는 S 유지
+    assert swot.count_axis_corrections([issue]) == 1
+
+
 def test_baseline_fixed_to_futurem():
     wrong = {"issue_id": "x", "baseline": "포스코홀딩스", "swot": {"S": [], "W": [], "O": [], "T": []}}
     assert any("baseline" in e for e in swot.validate_swot(wrong, KW))

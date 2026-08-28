@@ -75,8 +75,8 @@ lib/
   facets.ts      facets 필터(그룹간 AND/그룹내 OR) · visiblePills(모바일 pill 축소)
   card.ts        카드 배지(⚙️ 규칙요약) · INV-6 optional 필드 안전화
 middleware.ts    미인증 → /login?next= 리다이렉트 (실검증은 /api/*)
-app/api/         articles(L1)·issues·analysis·weekly(L2) · auth/{request,verify,logout}
-app/             login · posco(트랙 토글+facets+카드) · swot/weekly(L2) · layout(뷰포트)
+app/api/         articles·policies·disputes(L1: board 축약) · issues·analysis·weekly(L2) · auth/*
+app/             login · posco · policy(국가×이슈 보드) · trade(부과국×대상국 보드) · swot/weekly(L2)
 data/            *.sample.json (개발 시드) — 실데이터 *.json 은 .gitignore, public/ 아님
 ```
 
