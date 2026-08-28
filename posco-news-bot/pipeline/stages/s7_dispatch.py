@@ -12,8 +12,12 @@ from __future__ import annotations
 
 import abc
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Iterable
 
+import yaml
+
+from . import common
 from .kakao_format import posco_entities, validate_kakao
 
 DEFAULT_THUMBNAIL = "https://posco-news.example/assets/default-card.png"
@@ -263,3 +267,57 @@ def dispatch_kakao(
                 break
         (rep.sent if ok else rep.failed).append(aid)  # 실패해도 대체 발송 금지(INV-10)
     return rep
+
+
+# ── 오케스트레이터 진입점 (S7) ─────────────────────────────────────────────
+
+def _load_routes(routes_path: Path | None = None) -> list[dict[str, Any]]:
+    p = routes_path or (common.ROOT / "pipeline" / "dispatch_routes.yaml")
+    return yaml.safe_load(p.read_text(encoding="utf-8"))["routes"]
+
+
+def run(
+    run_id: str,
+    base_dir: Path | None = None,
+    *,
+    dispatch_allowed: bool = True,
+    already_sent: set[str] | None = None,
+    adapter: KakaoAdapter | None = None,
+    routes: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """S7 — 카톡 라우트 발송. dispatch_allowed=False 면 계획만(발송 0, fail-closed 기본).
+
+    반환: {sent, plan_counts, newly_sent, held, l0_skipped, ...} — dispatch_log 갱신용.
+    """
+    base = base_dir or (common.ROOT / "raw")
+    src = base / run_id / "l1.jsonl"
+    if not src.exists():
+        src = base / run_id / "analyzed.jsonl"
+    articles = list(common.read_jsonl(src)) if src.exists() else []
+
+    routes = routes if routes is not None else _load_routes()
+    kakao = next((r for r in routes if r.get("channel") == "kakao"), None)
+    if kakao is None:
+        return {"sent": [], "newly_sent": [], "skipped": "no_kakao_route"}
+
+    already = set(already_sent or set())
+    plan = plan_kakao(articles, kakao, already_sent=already, entities=posco_entities())
+
+    if not dispatch_allowed:
+        # dryrun/backfill/no-dispatch — 발송하지 않는다(fail-closed 기본값)
+        return {
+            "sent": [], "newly_sent": [], "dispatch_allowed": False,
+            "would_send": [a.get("id") for _, _, a in plan.to_send],
+            "plan_counts": plan.counts(), "held": plan.held, "l0_skipped": plan.l0_skipped,
+        }
+
+    room_env = kakao.get("room_id_env", "")
+    room_id = __import__("os").environ.get(room_env, "") if room_env else ""
+    used_adapter = adapter or (RecordingKakaoAdapter() if kakao.get("enabled") else DisabledKakaoAdapter())
+    rep = dispatch_kakao(plan, kakao, used_adapter, room_id=room_id)
+
+    return {
+        "sent": rep.sent, "newly_sent": rep.sent, "failed": rep.failed,
+        "enabled": rep.enabled, "dispatch_allowed": True,
+        "plan_counts": plan.counts(), "held": plan.held, "l0_skipped": plan.l0_skipped,
+    }
