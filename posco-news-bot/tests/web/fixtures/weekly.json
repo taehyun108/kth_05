@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0",
+  "week": "2026-W35",
+  "web_only": true,
+  "outlook": { "scheduled": [], "likely": [{ "text": "t", "basis": ["fx-1"] }], "monitoring": [] }
+}

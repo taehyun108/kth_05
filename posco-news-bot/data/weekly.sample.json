@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-08-25T07:30:00+09:00",
+  "week": "2026-W35",
+  "web_only": true,
+  "_sample": true,
+  "counts": { "total": 214, "by_track": { "posco": 68, "battery": 92, "policy": 34, "trade": 20 } },
+  "key_issues": ["2026-W35-us-45x-amendment"],
+  "outlook": {
+    "scheduled": [
+      { "date": "2026-09-29", "event": "이차전지 특별법 시행령 의견제출 마감", "action": "제12조 음극재 포함 의견서 제출", "confidence": "certain" }
+    ],
+    "likely": [
+      { "text": "45X 개정안 의견수렴이 10월 종료되면 연내 최종규칙 공표 가능성", "basis": ["2026-08-27-d3e4f5a6b7"], "confidence": "medium", "watch": "Federal Register 최종규칙 공고" }
+    ],
+    "monitoring": [
+      { "text": "중국 흑연 수출통제 품목 추가 여부", "basis": [], "confidence": "low" }
+    ],
+    "recommended_actions": [
+      "① 9월 2주까지 제12조 의견서 초안 완료",
+      "② 북미 원가 데이터 체계 점검 착수"
+    ]
+  }
+}

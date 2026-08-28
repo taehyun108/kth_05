@@ -2,14 +2,38 @@
   "schema_version": "1.0",
   "generated_at": "2026-08-27T07:30:00+09:00",
   "baseline": "포스코퓨처엠",
+  "web_only": true,
   "_sample": true,
   "_note": "L2 SWOT 샘플. data/ 는 서버에서만 읽힌다(INV-8). L1 세션은 /api/issues 에서 403.",
   "issues": [
     {
       "issue_id": "2026-W35-us-45x-amendment",
-      "title": "美 45X 음극재 적격비용 축소",
-      "quadrant": "T",
-      "article_ids": ["2026-08-27-d3e4f5a6b7"]
+      "title": "미국 45X 세액공제 음극재 적격비용 개정",
+      "status": "open",
+      "baseline": "포스코퓨처엠",
+      "signature": ["topic:45X", "topic:세액공제", "country:US"],
+      "articles": ["2026-08-27-d3e4f5a6b7"],
+      "merged_into": null,
+      "policy_stage": "proposed",
+      "swot": {
+        "S": [{ "text": "북미 현지 생산거점 보유로 적격 요건 충족에 유리합니다", "evidence": ["2026-08-27-d3e4f5a6b7"], "confidence": "high" }],
+        "W": [{ "text": "적격비용 산정에 필요한 원가 데이터 체계가 미비합니다", "evidence": [], "confidence": "low" }],
+        "O": [{ "text": "중국 소재사 배제가 강화되면 반사이익이 예상됩니다", "evidence": ["2026-08-27-d3e4f5a6b7"], "confidence": "medium" }],
+        "T": [{ "text": "음극재 적격비용 축소 시 세액공제 수취액이 직접 감소합니다", "evidence": ["2026-08-27-d3e4f5a6b7"], "confidence": "high" }]
+      },
+      "strategy": {
+        "SO": "북미 거점 조기 증설로 반사이익 선점",
+        "ST": "적격 요건 충족을 근거로 고객사 장기계약 재협상",
+        "WO": "원가 데이터 체계 구축 → 세액공제 수취 최대화",
+        "WT": "국내 세액공제(조특법) 확대로 손실 상쇄"
+      },
+      "response": {
+        "policy_ask": "45X 적격비용 산정기준 명확화 및 국내 세액공제 확대",
+        "counterpart": "산업부 소재부품장비협력과"
+      },
+      "review": { "reviewed_by": null, "reviewed_at": null, "verdict": null },
+      "confidential": true,
+      "web_only": true
     }
   ]
 }

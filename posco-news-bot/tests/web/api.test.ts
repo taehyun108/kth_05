@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { articlesResponse, issuesResponse, analysisResponse } from "../../lib/api.ts";
+import { articlesResponse, issuesResponse, analysisResponse, weeklyResponse } from "../../lib/api.ts";
 import { L2_ONLY, filterArticlesForLevel } from "../../lib/fields.ts";
 
 const FIX = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
@@ -39,6 +39,12 @@ test("미인증(null) 은 401, L2 는 200", () => {
 
 test("/api/analysis 도 L2 전용 (L1 → 403)", () => {
   assert.equal(analysisResponse("L1", FIX).status, 403);
+});
+
+test("완료기준: /api/weekly 도 L2 전용 (L1 → 403, 미인증 → 401, L2 → 200)", () => {
+  assert.equal(weeklyResponse("L1", FIX).status, 403);
+  assert.equal(weeklyResponse(null, FIX).status, 401);
+  assert.equal(weeklyResponse("L2", FIX).status, 200);
 });
 
 test("filterArticlesForLevel 은 원본을 변형하지 않는다(L1 사본만 제거)", () => {

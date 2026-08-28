@@ -34,3 +34,11 @@ export function analysisResponse(level: Level | null | undefined, dir?: string):
   const raw = readDataFile("analysis", dir);
   return { status: 200, body: raw };
 }
+
+// /api/weekly — L2 전용 (주간 브리프·outlook). likely·monitoring 은 웹에서만.
+export function weeklyResponse(level: Level | null | undefined, dir?: string): ApiResult {
+  const g = requireLevel(level, "L2");
+  if (!g.ok) return { status: g.status, body: { error: g.status === 401 ? "unauthorized" : "forbidden" } };
+  const raw = readDataFile("weekly", dir);
+  return { status: 200, body: raw };
+}

@@ -24,7 +24,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pipeline.stages import (
-    common, s1_collect, s2_normalize, s3_fetch, s4_analyze, s4_l1, s6_publish, s7_dispatch,
+    common, s1_collect, s2_normalize, s3_fetch, s4_analyze, s4_l1, s5_swot, s6_publish, s7_dispatch,
 )
 
 # 실패 정책 (docs §11.5)
@@ -130,6 +130,22 @@ def _s4_l1(ctx: StageContext) -> StageResult:
                        note=str(st))
 
 
+def _s5_swot(ctx: StageContext) -> StageResult:
+    # 클러스터링은 L0(결정론). SWOT 텍스트 생성은 L2 — 키 없으면 클러스터만 유지(INV-6).
+    src = ctx.base_dir / ctx.run_id / "l1.jsonl"
+    if not src.exists():
+        src = ctx.base_dir / ctx.run_id / "analyzed.jsonl"
+    articles = list(common.read_jsonl(src)) if src.exists() else []
+    issues_path = ctx.data_dir / "issues.json"
+    existing = []
+    if issues_path.exists():
+        existing = json.loads(issues_path.read_text(encoding="utf-8")).get("issues", [])
+    issues = s5_swot.cluster(articles, existing)          # id 안정: 기존 이슈에 기사만 추가
+    s5_swot.write_issues(issues, data_dir=ctx.data_dir)
+    return StageResult("S5", "success", output_count=len(issues),
+                       artifacts=[str(issues_path)], note="clustered(L0); SWOT 텍스트는 L2")
+
+
 def _s6_publish(ctx: StageContext) -> StageResult:
     res = s6_publish.run(ctx.run_id, base_dir=ctx.base_dir, data_dir=ctx.data_dir)
     return StageResult("S6", "success", output_count=res["output_count"],
@@ -168,7 +184,8 @@ def build_default_dag() -> list[Stage]:
         Stage("S3", _s3_fetch, FAIL_SOFT),
         Stage("S4", _s4_analyze, FAIL_SOFT),
         Stage("S4L1", _s4_l1, FAIL_SOFT),
-        # S5 CLUSTER+SWOT(private)은 P6 — 형제 노드, S7과 무의존(INV-3)
+        # S5 CLUSTER+SWOT(private)은 S7과 무의존인 형제 노드 — S7이 issues.json을 입력받지 못한다(INV-3)
+        Stage("S5", _s5_swot, FAIL_SOFT),
         Stage("S6", _s6_publish, FAIL_HARD),
         Stage("S7", _s7_dispatch, FAIL_CLOSED),
         Stage("S8", _s8_report, FAIL_SOFT),
@@ -256,7 +273,7 @@ def build_report(state: dict[str, Any]) -> str:
     lines = [f"[RUN {state['run_id']}] {state['mode']} · {state.get('status','?')}",
              f"💰 api_calls {state.get('cost_total',{}).get('api_calls',0)} · "
              f"${state.get('cost_total',{}).get('usd',0.0)}", ""]
-    for name in ("S0", "S1", "S2", "S3", "S4", "S4L1", "S6", "S7", "S8"):
+    for name in ("S0", "S1", "S2", "S3", "S4", "S4L1", "S5", "S6", "S7", "S8"):
         s = stages.get(name)
         if not s:
             continue

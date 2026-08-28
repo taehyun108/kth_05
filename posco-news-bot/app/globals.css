@@ -52,6 +52,16 @@ h1.title { font-size: 1.15rem; margin: 8px 0 4px; }
 .badge-dispute-preliminary { background: #fff3cd; color: #7a5b00; }
 .badge-rule-summary { background: #eceff3; color: #555; }
 
+/* SWOT 4분면 */
+.swot-grid { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 8px; }
+@media (min-width: 640px) { .swot-grid { grid-template-columns: 1fr 1fr; } }
+.swot-cell { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.swot-S { background: #e7f6ec; }
+.swot-W { background: #fde8e8; }
+.swot-O { background: #eef4fb; }
+.swot-T { background: #fff3cd; }
+.conf { color: var(--muted); font-size: 0.75rem; }
+
 .login-box { max-width: 380px; margin: 40px auto; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
 .login-box input { width: 100%; padding: 10px; margin: 6px 0; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; }
 .login-box button { width: 100%; padding: 10px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-size: 1rem; cursor: pointer; }
