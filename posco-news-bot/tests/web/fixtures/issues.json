@@ -1,5 +1,17 @@
 {
   "schema_version": "1.0",
   "baseline": "포스코퓨처엠",
-  "issues": [{ "issue_id": "fx-issue-1", "quadrant": "T", "article_ids": ["fx-1"] }]
+  "issues": [
+    {
+      "issue_id": "fx-issue-1",
+      "title": "북미거점반사이익 이슈",
+      "status": "open",
+      "quadrant": "T",
+      "article_ids": ["fx-1"],
+      "swot": {
+        "S": [{ "text": "북미거점반사이익 대응 역량 보유", "evidence": ["fx-1"], "confidence": "high" }],
+        "W": [], "O": [], "T": []
+      }
+    }
+  ]
 }

@@ -4,6 +4,8 @@ import type { Level } from "./levels.ts";
 import { requireLevel } from "./guard.ts";
 import { filterArticlesForLevel } from "./fields.ts";
 import { readDataFile } from "./data.ts";
+import { ask, resolveScope } from "./ask.ts";
+import type { Article } from "./ask.ts";
 
 export interface ApiResult {
   status: number;
@@ -57,4 +59,16 @@ export function disputesResponse(level: Level | null | undefined, dir?: string):
   if (!g.ok) return { status: g.status, body: { error: g.status === 401 ? "unauthorized" : "forbidden" } };
   const raw = readDataFile(level === "L2" ? "disputes" : "dispute_board", dir);
   return { status: 200, body: raw };
+}
+
+// /api/ask — 웹 채널 Q&A. ★issues(SWOT)는 오직 web+L2 에서만 디스크에서 읽는다★.
+//   L1/미인증은 issues.json 을 읽지 않으므로 우회 조회가 구조적으로 불가능하다(INV-3/8).
+export function askResponse(question: string, level: Level | null | undefined, dir?: string): ApiResult {
+  const scope = resolveScope("web", level);
+  const articles = (readDataFile("articles", dir).articles as Article[]) || [];
+  // 스코프가 허용할 때만 issues 를 읽는다(로드 자체를 게이트).
+  const issues = scope.includeIssues ? (readDataFile("issues", dir).issues as unknown[]) : undefined;
+  const hasLawKey = !!process.env.LAW_API_KEY;
+  const ans = ask({ question, channel: "web", level, articles, issues, hasLawKey });
+  return { status: 200, body: ans as unknown as Record<string, unknown> };
 }
