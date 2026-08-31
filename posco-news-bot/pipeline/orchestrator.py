@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from dataclasses import asdict, dataclass, field
@@ -217,8 +218,14 @@ def build_default_dag() -> list[Stage]:
 
 # ── 상태 파일 ────────────────────────────────────────────────────────────────
 
+def state_dir() -> Path:
+    # PNB_STATE_DIR 로 재정의 가능(테스트는 tmp 로 격리, 운영은 기본 pipeline/state)
+    d = os.environ.get("PNB_STATE_DIR")
+    return Path(d) if d else common.ROOT / "pipeline" / "state"
+
+
 def state_path(run_id: str) -> Path:
-    return common.ROOT / "pipeline" / "state" / f"run-{run_id}.json"
+    return state_dir() / f"run-{run_id}.json"
 
 
 def load_state(run_id: str) -> dict[str, Any] | None:

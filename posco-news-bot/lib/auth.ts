@@ -103,10 +103,10 @@ export async function verifyCode(
     return { ok: false, reason: "expired" };
   }
   if (rec.nonce !== nonce) {
-    return bumpAttempt(email, rec, opts.kv, "nonce_mismatch"); // 세션 고정 방지
+    return bumpAttempt(email, rec, opts.kv, "nonce_mismatch", now); // 세션 고정 방지
   }
   if (rec.codeHash !== hashCode(code, email)) {
-    return bumpAttempt(email, rec, opts.kv, "wrong_code");
+    return bumpAttempt(email, rec, opts.kv, "wrong_code", now);
   }
   await opts.kv.del(codeKey(email)); // 성공 → 즉시 폐기 (일회성)
   return { ok: true, level: rec.level, email };
@@ -116,14 +116,17 @@ async function bumpAttempt(
   email: string,
   rec: CodeRecord,
   kv: KVStore,
-  reason: string
+  reason: string,
+  now: number
 ): Promise<VerifyResult> {
   rec.attempts += 1;
   if (rec.attempts >= MAX_ATTEMPTS) {
     await kv.del(codeKey(email)); // 5회 실패 → 코드 폐기, 재발급 필요
     return { ok: false, reason: "too_many_attempts" };
   }
-  const ttl = Math.max(1, rec.expiresAt - Date.now());
+  // ★TTL 은 검증과 같은 시계(now)로 계산한다★ — Date.now() 를 섞으면 주입 시계와
+  // 어긋나 TTL 이 음수→1ms 로 찍혀 코드가 조기 소멸(간헐 실패의 원인이었다).
+  const ttl = Math.max(1, rec.expiresAt - now);
   await kv.set(codeKey(email), JSON.stringify(rec), ttl);
   return { ok: false, reason };
 }

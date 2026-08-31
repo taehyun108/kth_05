@@ -1,11 +1,23 @@
 // 로그인 코드 수명주기 — 만료·5회·일회성·논스·발급제한·레벨 (KV 백엔드)
-import { test } from "node:test";
+import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { requestCode, verifyCode, MAX_ATTEMPTS } from "../../lib/auth.ts";
 import { createMemoryKV } from "../../lib/kvstore.ts";
 
-process.env.ALLOWED_EMAIL_DOMAINS = "poscofuturem.com";
-process.env.L2_ADMIN_EMAILS = "admin@poscofuturem.com";
+// env 를 테스트 단위로 설정·복원해 전역 상태를 남기지 않는다(격리)
+const _saved: Record<string, string | undefined> = {};
+beforeEach(() => {
+  _saved.ALLOWED_EMAIL_DOMAINS = process.env.ALLOWED_EMAIL_DOMAINS;
+  _saved.L2_ADMIN_EMAILS = process.env.L2_ADMIN_EMAILS;
+  process.env.ALLOWED_EMAIL_DOMAINS = "poscofuturem.com";
+  process.env.L2_ADMIN_EMAILS = "admin@poscofuturem.com";
+});
+afterEach(() => {
+  for (const k of ["ALLOWED_EMAIL_DOMAINS", "L2_ADMIN_EMAILS"]) {
+    if (_saved[k] === undefined) delete process.env[k];
+    else process.env[k] = _saved[k];
+  }
+});
 
 test("정상 흐름: 발급 → 검증 성공, 레벨 부여", async () => {
   const kv = createMemoryKV();

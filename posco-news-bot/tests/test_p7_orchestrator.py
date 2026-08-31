@@ -38,12 +38,10 @@ class UnavailableClient:
 
 
 @pytest.fixture(autouse=True)
-def _clean_state():
+def _isolate_state(tmp_path, monkeypatch):
+    # 상태 파일을 테스트별 tmp 로 격리 — 실제 pipeline/state/ 오염 방지
+    monkeypatch.setenv("PNB_STATE_DIR", str(tmp_path / "state"))
     yield
-    d = ROOT / "pipeline" / "state"
-    if d.exists():
-        for p in d.glob("run-testp7-*.json"):
-            p.unlink()
 
 
 def seed_collected(base, run_id, rows):

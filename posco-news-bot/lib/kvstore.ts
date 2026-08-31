@@ -77,3 +77,8 @@ export function resolveKV(): KVStore {
   _singleton = url && token ? createRestKV(url, token) : createMemoryKV();
   return _singleton;
 }
+
+// 테스트 격리용 — 싱글턴을 비워 다음 resolveKV 가 새 인스턴스를 만들게 한다.
+export function resetKVForTests(): void {
+  _singleton = null;
+}
