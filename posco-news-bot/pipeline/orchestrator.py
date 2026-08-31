@@ -259,10 +259,16 @@ def _done(status: str | None) -> bool:
     return status in ("success", "skipped")
 
 
+# L0 단독 발행 경로 (INV-6) — L1/L2·SWOT·발송 제외
+L0_STAGES = ["S0", "S1", "S2", "S3", "S4", "S6", "S8"]
+
+
 def run_pipeline(ctx: StageContext, dag: list[Stage] | None = None) -> dict[str, Any]:
     dag = dag or build_default_dag()
     state = ctx.state
     only = ctx.params.get("only")
+    if only == ["L0"]:                      # `--only L0` 별칭 → L0 스테이지 집합
+        only = L0_STAGES
     resuming = ctx.params.get("resuming", False)
 
     for stage in dag:
