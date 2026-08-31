@@ -4,6 +4,8 @@
 
 | 하려는 작업 | 읽을 문서 |
 |---|---|
+| **지금 어디까지 됐나 / 다음 할 일** | `../STATUS.md` ← **먼저 읽기** |
+| **Z2 외부망 PC에서 실행** | `Z2-RUNBOOK.md` |
 | 처음 파악 | `00-overview.md` → `ROADMAP.md` |
 | 수집기 구현 | `01-collect.md` + `10-data-model.md` |
 | 요약·분석 구현 | `02-analyze.md` + `09-orchestrator.md`(에이전트 절) |
