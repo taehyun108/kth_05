@@ -26,7 +26,7 @@ if __package__ in (None, ""):
 
 from pipeline.stages import (
     common, s1_collect, s2_normalize, s3_fetch, s4_analyze, s4_l1, s5_swot, s6_publish, s7_dispatch,
-    stagers,
+    s7_mail, stagers,
 )
 
 # 실패 정책 (docs §11.5)
@@ -189,8 +189,20 @@ def _s7_dispatch(ctx: StageContext) -> StageResult:
         return StageResult("S7", "skipped", note=f"발송 차단({ctx.mode}) — would_send {len(res.get('would_send', []))}")
     newly = res.get("newly_sent", [])
     ctx.state.setdefault("dispatch_log", []).extend(newly)  # 발송 즉시 기록(멱등)
+
+    # 메일(Part A/B) — 발송 허용 시에만. 메일은 fail-soft(카톡 게이트와 별개)
+    mail_note = ""
+    try:
+        mres = s7_mail.run(ctx.run_id, base_dir=ctx.base_dir,
+                           base_url=ctx.params.get("base_url", ""),
+                           out_dir=ctx.base_dir / ctx.run_id / "mail")
+        mail_note = f" · 메일 {mres['meta']['part_a']}+{mres['meta']['part_b']}({mres['sender']})"
+    except Exception as exc:  # 메일 실패는 카톡을 막지 않는다
+        mail_note = f" · 메일 실패({type(exc).__name__})"
+
     return StageResult("S7", "success", output_count=len(newly),
-                       note=f"발송 {len(newly)} · 보류 {len(res.get('held', []))} · L0스킵 {len(res.get('l0_skipped', []))}")
+                       note=f"카톡 {len(newly)} · 보류 {len(res.get('held', []))} · "
+                            f"L0스킵 {len(res.get('l0_skipped', []))}{mail_note}")
 
 
 def _s8_report(ctx: StageContext) -> StageResult:
