@@ -456,6 +456,191 @@ def test_report_always_shows_newest_article_date():
     assert "a-ilbo: 2026-09-01 (0일 전)" in text
 
 
+# ── ⑪ verified 아니면 절대 안 켜진다 ───────────────────────────────────────
+
+def test_unverified_feed_is_force_disabled(tmp_path):
+    """★예외 없음★ enabled:true 로 적어도 verified 가 아니면 로더가 끈다."""
+    y = tmp_path / "src.yaml"
+    y.write_text(
+        "version: 1\n"
+        "defaults: {timeout_sec: 10, max_items: 50}\n"
+        "sources:\n"
+        "  - {id: guessed, name: 추정매체, tier: 1, section: x,\n"
+        "     url: 'https://guess.example.com/rss', enabled: true, verified: false}\n"
+        "  - {id: checked, name: 확인매체, tier: 1, section: x,\n"
+        "     url: 'https://ok.example.com/rss', enabled: true, verified: true}\n",
+        encoding="utf-8")
+    cfg = rss.load_sources(y)
+    assert [s["id"] for s in rss.enabled_sources(cfg)] == ["checked"]
+    guessed = next(s for s in cfg["sources"] if s["id"] == "guessed")
+    assert guessed["enabled"] is False
+    assert guessed["disabled_reason"] == "unverified"
+    assert rss.unverified_sources(cfg) == ["guessed"]
+
+
+def test_shipped_sources_yaml_has_no_unverified_enabled():
+    """실제 rss_sources.yaml 에도 '미확인인데 켜진' 피드가 없어야 한다."""
+    cfg = rss.load_sources()
+    assert all(s.get("verified") for s in rss.enabled_sources(cfg))
+    assert rss.unverified_sources(cfg), "확인 대기 목록은 리포트에 노출된다"
+
+
+# ── ⑫ 응답 검증기 — 200 은 성공을 뜻하지 않는다 ────────────────────────────
+
+EDAILY_FALLBACK = (common.ROOT / "tests" / "fixtures" / "edaily_rss_index_fallback.html")
+
+
+def test_edaily_error_fallback_is_rejected():
+    """★실호출 캡처★ 200 · text/html · ?aspxerrorpath=/rss/ 로 리다이렉트."""
+    src = {"id": "edaily-rss-index", "url": "https://www.edaily.co.kr/rss/"}
+    resp = rss.FeedResponse(
+        body=EDAILY_FALLBACK.read_bytes(),
+        content_type="text/html",
+        final_url="https://www.edaily.co.kr/?aspxerrorpath=/rss/",
+        status=200,
+    )
+    with pytest.raises(rss.FeedInvalid) as exc:
+        rss.validate_response(src, resp)
+    assert "오류 페이지로 리다이렉트" in str(exc.value)
+
+
+@pytest.mark.parametrize("resp,expect", [
+    (rss.FeedResponse(b"<html><body>hi</body></html>", "text/html", "https://x.test/rss.xml"),
+     "XML 아님"),
+    (rss.FeedResponse(b"<html><body>hi</body></html>", "application/xml", "https://x.test/rss.xml"),
+     "피드 아님"),
+    (rss.FeedResponse(b"<?xml version='1.0'?><rss version='2.0'><channel></channel></rss>",
+                      "text/xml", "https://x.test/rss.xml"),
+     "item/entry 0건"),
+    (rss.FeedResponse(b"<?xml version='1.0'?><rss><channel>", "text/xml", "https://x.test/rss.xml"),
+     "XML 파싱 실패"),
+    (rss.FeedResponse(b"<rss/>", "text/xml", "https://other.test/rss.xml"),
+     "다른 주소로 리다이렉트"),
+])
+def test_response_validator_rejects(resp, expect):
+    with pytest.raises(rss.FeedInvalid) as exc:
+        rss.validate_response({"id": "x", "url": "https://x.test/rss.xml"}, resp)
+    assert expect in str(exc.value)
+
+
+def test_response_validator_accepts_real_feed_shapes():
+    src = {"id": "a-ilbo", "url": "https://a.example.com/rss"}
+    # 표준 RSS · Atom · Content-Type 미제공 · www 유무 차이 → 모두 통과
+    for body, ctype, final in [
+        (FEED_A.encode("utf-8"), "text/xml; charset=utf-8", "https://a.example.com/rss"),
+        (FEED_D.encode("utf-8"), "application/atom+xml", "https://a.example.com/rss"),
+        (FEED_A.encode("utf-8"), "", "https://a.example.com/rss"),
+        (FEED_A.encode("utf-8"), "text/xml", "https://www.a.example.com/rss"),
+    ]:
+        rss.validate_response(src, rss.FeedResponse(body, ctype, final))
+
+
+def test_invalid_response_is_recorded_as_collect_failure():
+    """검증 실패는 fail-soft 로 넘기되 ★수집 실패로 기록★된다."""
+    cfg = {"version": 1, "sources": [
+        {"id": "bad", "name": "오류매체", "url": "https://bad.test/rss/", "enabled": True},
+        {"id": "a-ilbo", "name": "가나일보", "url": "https://a.example.com/rss", "enabled": True}]}
+
+    def f(url):
+        if url == "https://bad.test/rss/":
+            return rss.FeedResponse(b"<html>x</html>", "text/html",
+                                    "https://bad.test/?aspxerrorpath=/rss/")
+        return rss.FeedResponse(FEED_A.encode("utf-8"), "text/xml", url)
+
+    records, errors, counts = rss.collect_feeds(cfg, f)
+    assert counts["bad"] == 0 and counts["a-ilbo"] == 2      # 정상 피드는 계속 수집
+    bad = next(e for e in errors if e["feed"] == "bad")
+    assert bad["kind"] == "invalid_response" and bad["level"] == "error"
+    assert "오류 페이지로 리다이렉트" in bad["reason"]
+
+
+def test_report_shows_invalid_reason_and_pending():
+    cov = {
+        "by_source": {"rss": 2}, "by_outlet": {"가나일보": 2}, "feed_counts": {"bad": 0},
+        "dead_feeds": [], "feed_newest": {}, "feed_age_days": {},
+        "stale_feeds": {}, "stale_thresholds": {}, "unregistered_outlets": {},
+        "invalid_feeds": {"bad": "오류 페이지로 리다이렉트 (https://bad.test/?aspxerrorpath=/rss/)"},
+        "pending_feeds": ["yonhap-economy", "etnews-parts"],
+        "source_tried": 1, "source_ok": 1,
+    }
+    text = "\n".join(orch.coverage_lines(cov))
+    assert "응답 검증 실패" in text and "오류 페이지로 리다이렉트" in text
+    assert "확인 대기" in text and "yonhap-economy" in text
+
+
+# ── ⑬ 카테고리 필터 (이데일리처럼 <category> 를 주는 피드) ──────────────────
+
+EDAILY_FEED = """<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"><channel>
+<title>이데일리 - 전체뉴스</title>
+<item>
+	<title><![CDATA[공정위, 장류 담합 현장조사]]></title>
+	<link>https://www.edaily.co.kr/News/Read?newsId=1</link>
+	<category>산업/통상</category>
+	<pubDate>Tue, 01 Sep 2026 16:20:39 +0900</pubDate>
+</item>
+<item>
+	<title><![CDATA[[포토] 부산국제영화제 10월 6일 개막]]></title>
+	<link>https://www.edaily.co.kr/News/Read?newsId=2</link>
+	<category>영화계소식</category>
+	<pubDate>Tue, 01 Sep 2026 16:32:09 +0900</pubDate>
+</item>
+<item>
+	<title><![CDATA[차명석 LG 단장 백의종군]]></title>
+	<link>https://www.edaily.co.kr/News/Read?newsId=3</link>
+	<category>국내야구소식</category>
+	<pubDate>Tue, 01 Sep 2026 16:31:22 +0900</pubDate>
+</item>
+<item>
+	<title><![CDATA[LGD, 차세대 OLED 인재 확보]]></title>
+	<link>https://www.edaily.co.kr/News/Read?newsId=4</link>
+	<category>전자</category>
+	<pubDate>Tue, 01 Sep 2026 16:33:13 +0900</pubDate>
+</item>
+<item>
+	<title><![CDATA[카테고리 없는 기사]]></title>
+	<link>https://www.edaily.co.kr/News/Read?newsId=5</link>
+	<pubDate>Tue, 01 Sep 2026 16:00:00 +0900</pubDate>
+</item>
+</channel></rss>"""
+
+
+def test_category_filter_narrows_firehose():
+    cfg = {"version": 1, "sources": [{
+        "id": "edaily-all", "name": "이데일리", "url": "https://e.test/rss.xml",
+        "enabled": True, "category_filter": ["산업", "전자"]}]}
+    records, errors, counts = rss.collect_feeds(
+        cfg, lambda u: rss.FeedResponse(EDAILY_FEED.encode("utf-8"), "text/xml", u))
+    titles = [r["title"][:6] for r in records]
+    assert "공정위, 장류" in " ".join(titles) or any("공정위" in t for t in titles)
+    assert not any("부산국제" in r["title"] for r in records)     # 영화 제외
+    assert not any("차명석" in r["title"] for r in records)       # 야구 제외
+    assert counts["edaily-all"] == 3        # 산업/통상 · 전자 · 카테고리 없는 1건
+    assert any(e.get("reason", "").startswith("category_filter") for e in errors)
+
+
+def test_category_filter_keeps_uncategorized_items():
+    """분류 누락으로 기사를 잃지 않는다 — category 가 빈 항목은 통과시킨다."""
+    src = {"category_filter": ["산업"]}
+    assert rss.category_allows(src, {"categories": []}) is True
+    assert rss.category_allows(src, {"categories": ["산업/통상"]}) is True
+    assert rss.category_allows(src, {"categories": ["영화계소식"]}) is False
+    assert rss.category_allows({}, {"categories": ["영화계소식"]}) is True   # 필터 미설정
+
+
+def test_category_then_keyword_two_stage(keywords):
+    """2단 구조: 카테고리로 줄인 뒤 키워드로 거른다."""
+    cfg = {"version": 1, "sources": [{
+        "id": "edaily-all", "name": "이데일리", "url": "https://e.test/rss.xml",
+        "enabled": True, "category_filter": ["산업", "전자"]}]}
+    records, _, _ = rss.collect_feeds(
+        cfg, lambda u: rss.FeedResponse(EDAILY_FEED.encode("utf-8"), "text/xml", u))
+    assert len(records) == 3                       # 1단: 카테고리
+    kept, dropped = s1_collect.filter_rss_records(records, keywords)
+    assert len(kept) + dropped == 3                # 2단: 키워드
+    assert dropped >= 1                            # 장류 담합은 우리 관심사가 아니다
+
+
 # ── ⑧ 네이버 HUB 는 기본 비활성 ─────────────────────────────────────────────
 
 def test_naver_hub_disabled_without_env(keywords, monkeypatch):
@@ -495,7 +680,8 @@ def test_rss_sources_yaml_schema():
 
 def test_run_writes_coverage_artifact(tmp_path, monkeypatch):
     monkeypatch.setattr(rss, "load_sources", lambda *a, **k: make_cfg("a-ilbo"))
-    monkeypatch.setattr(rss, "fetch_bytes", lambda url, timeout=15: fetcher(url))
+    monkeypatch.setattr(rss, "fetch_response",
+                        lambda url, timeout=15: rss.FeedResponse(fetcher(url), "text/xml", url))
     res = s1_collect.run(run_id="T-2", base_dir=tmp_path, use_google=False)
     cov = json.loads((tmp_path / "T-2" / "coverage.json").read_text(encoding="utf-8"))
     assert cov["by_outlet"] == {"가나일보": 1}

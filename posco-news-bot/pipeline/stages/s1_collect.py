@@ -353,6 +353,8 @@ def collect(
     errors: list[dict[str, Any]] = []
     feed_counts: dict[str, int] = {}
     freshness: dict[str, str] = {}
+    invalid_feeds: dict[str, str] = {}
+    pending_feeds: list[str] = []
     rss_cfg_used: dict[str, Any] | None = None
     registered: set[str] = set()
     source_ok = 0
@@ -366,10 +368,14 @@ def collect(
         registered = {s.get("name") for s in cfg.get("sources", []) if s.get("name")}
         raw_items, rss_errors, feed_counts = rss.collect_feeds(cfg, rss_fetcher)
         freshness = feed_freshness(raw_items)
+        invalid_feeds = {e["feed"]: e["reason"] for e in rss_errors
+                         if e.get("kind") == "invalid_response"}
+        pending_feeds = rss.unverified_sources(cfg)
         errors.extend(rss_errors)
         kept, dropped = filter_rss_records(raw_items, keywords)
         records.extend(kept)
-        if kept or not rss_errors:
+        hard_errors = [e for e in rss_errors if e.get("level") == "error"]
+        if kept or not hard_errors:
             source_ok += 1
         errors.append({"stage": "collect", "source": "rss", "level": "info",
                        "reason": f"피드 {len(feed_counts)}개 · 원본 {len(raw_items)} → 키워드 통과 {len(kept)} (제외 {dropped})"})
@@ -427,6 +433,8 @@ def collect(
     health = update_feed_health(feed_counts) if (track_health and feed_counts) else {}
     coverage = build_coverage(records, feed_counts, registered, health, freshness,
                               stale_thresholds(rss_cfg_used))
+    coverage["invalid_feeds"] = invalid_feeds        # 200 이지만 피드가 아니었던 것
+    coverage["pending_feeds"] = pending_feeds        # verified 아니라 안 도는 것
     coverage["source_tried"] = source_tried
     coverage["source_ok"] = source_ok
     return records, errors, coverage
@@ -474,6 +482,8 @@ def run(
         print(f"[s1] ⚠️ 죽은 피드 의심(0건): {coverage['dead_feeds']}")
     if coverage["stale_feeds"]:
         print(f"[s1] ⚠️ 정체된 피드(최신 기사 경과일): {coverage['stale_feeds']}")
+    for fid, why in (coverage.get("invalid_feeds") or {}).items():
+        print(f"[s1] ⛔ {fid}: {why}")
     if coverage["unregistered_outlets"]:
         print(f"[s1] ℹ️ RSS 미등록 매체 후보: {list(coverage['unregistered_outlets'])[:5]}")
     if errors:

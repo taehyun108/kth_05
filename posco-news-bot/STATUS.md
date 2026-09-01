@@ -151,6 +151,7 @@ S7 발송     카톡 0(route disabled) · 메일 Part A 9 + Part B 12
 | `https://rss.etnews.com/06064.xml` (전자>소재) | **200 · text/xml** · 50건 · 파싱 정상 · ⚠️ **최신 기사 2026-06-25 = 68일 정체** |
 | `https://www.edaily.co.kr/rss/` | **200 이지만 실제로는 오류 폴백** (`?aspxerrorpath=/rss/` 로 이동). 섹션별 RSS 목록 없음 |
 | `http://rss.edaily.co.kr/edaily_news.xml` (전체뉴스) | **200 · text/xml** · 50건 · 당일 기사 · `<category>` 채워짐 · UTF-8 BOM · 파싱 정상 |
+| `https://rss.edaily.co.kr/edaily_news.xml` (https 확인) | ❌ **TLS 협상 실패** — 이 호스트는 https 를 제대로 서비스하지 않는다. http 유지 |
 
 > ⚠️ 첫 보고에서 "RSS 목록 200 · 40개 확보"라고 썼지만, 그 시점엔 목록 페이지를 부르지 않고
 > 개별 피드 2건만 불렀다. **지금은 실제로 목록 페이지를 불러 40개를 확보했다.**
@@ -180,17 +181,26 @@ S7 발송     카톡 0(route disabled) · 메일 Part A 9 + Part B 12
 Z2 에서는 우리 러너가 직접 부르므로 **UA 차단·프록시·https 지원 여부가 다를 수 있다.**
 아래를 `python -m scripts.smoke_collect --feed <id>` 로 하나씩 확인하고 결과를 알려줄 것.
 
-### ① 활성 피드 재확인 (지금 `enabled: true`)
+### ① 활성 피드 재확인 (실호출로 확인된 3건만 `enabled`)
 
 | 피드 id | URL | 확인할 것 |
 |---|---|---|
 | `etnews-breaking` | `rss.etnews.com/Section902.xml` | 200 · 당일 기사 · 키워드 통과율(전 분야라 낮은 게 정상) |
 | `etnews-material` | `rss.etnews.com/06064.xml` | ★**아직도 정체인지**★ 최신 기사일 확인. 계속 멈춰 있으면 `enabled: false` 로 내리고 `etnews-parts` 로 대체 |
-| `edaily-all` | `rss.edaily.co.kr/edaily_news.xml` | 200 · **https 로도 되는지** (지금은 http) · 같은 기사 중복(카테고리 2건) 병합 여부 |
-| `yonhap-economy` | `www.yna.co.kr/rss/economy.xml` | **미확인 주소** — 실제 연합뉴스 RSS 주소가 맞는지부터 |
-| `federal-register-energy` | `federalregister.gov/api/v1/documents.rss?...` | **미확인** · 영문 · `source_type: gazette` 로 policy_stage 판정되는지 |
+| `edaily-all` | `rss.edaily.co.kr/edaily_news.xml` | 200 · `category_filter` 통과율 · 같은 기사 중복(카테고리 2건) 병합 여부 · **https 재확인**(현재 TLS 실패라 http) |
 
-### ② 전자신문 대기 피드 (지금 `enabled: false`, 주소만 확보)
+> `yonhap-economy` 와 `federal-register-energy` 는 **미확인 주소라 내렸다**(`verified: false` → 로더가 강제 비활성).
+> 아래 ② 목록과 함께 확인 후 올릴 것.
+
+### ② 확인 대기 피드 (`verified: false` → 로더가 강제 비활성)
+
+리포트에 `⏸ 확인 대기 N건` 으로 계속 뜬다. 하나씩 열어 보고 켠다.
+
+**주소 자체가 미확인 (추정으로 적은 것 — 틀렸을 수 있다)**
+- `yonhap-economy` — `https://www.yna.co.kr/rss/economy.xml`
+- `federal-register-energy` — `https://www.federalregister.gov/api/v1/documents.rss?conditions[term]=battery`
+
+**전자신문 — 목록 페이지에서 주소는 확인, 개별 피드는 미확인**
 
 `etnews-parts`(부품) · `etnews-equipment`(장비) · `etnews-electronics`(전자 상위) ·
 `etnews-heavy`(중공업) · `etnews-economy`(경제) · `etnews-mobility`(모빌리티) ·
@@ -213,3 +223,22 @@ Z2 에서는 우리 러너가 직접 부르므로 **UA 차단·프록시·https 
 
 주간 갱신이 정상인 섹션이 있으면 `rss_sources.yaml` 의 해당 피드에 `stale_days: 30` 처럼 개별 지정.
 S8 리포트의 `피드별 최신 기사:` 를 며칠 보고 정할 것.
+
+---
+
+## 9. 소스 등록 규칙 (2026-09-01 확정)
+
+**`verified: true` 가 아니면 절대 켜지지 않는다. 예외 없음.**
+`rss.load_sources()` 가 `enabled: true` 로 적혀 있어도 강제로 내린다.
+
+왜: 추정 주소가 켜져 있으면 **"수집이 도는 것처럼 보이는데 실제로는 비어 있는"** 상태가 된다.
+근거가 두 번 나왔다 — 전자신문 `Section902` 를 배터리 섹션으로 오인했고, 이데일리 `/rss/` 는 200을 주는 오류 페이지였다.
+
+`verified: true` 로 올리는 조건 (전부 실호출로 확인):
+1. HTTP 200
+2. `Content-Type` 이 xml 계열
+3. 최종 URL 이 요청 URL 과 같음 (오류 리다이렉트 아님)
+4. 루트가 `<rss>`/`<feed>`, `item`/`entry` 1건 이상
+5. **최신 기사일이 최근** — 200·정상 XML 이어도 몇 달 멈춰 있을 수 있다
+
+1~4는 `rss.validate_response()` 가 매 수집마다 자동으로 본다. 5는 `coverage.stale_feeds` 가 본다.

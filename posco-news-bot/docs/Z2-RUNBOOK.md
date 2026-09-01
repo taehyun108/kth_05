@@ -122,7 +122,11 @@ python -m scripts.smoke_collect --with-google         # 구글 보조까지 함�
 - `cache/smoke/raw-rss-*.jsonl`, `cache/smoke/smoke-report.json` — 원본. `cache/`는 `.gitignore`라 **커밋되지 않는다**.
 
 ### 실패 해석
-- ❌ 전 피드 0건 + 오류도 0 → `rss_sources.yaml` 의 `enabled` 가 전부 false. 예시 3건은 `verified: false` 일 뿐 `enabled: true` 다.
+- ❌ 전 피드 0건 + 오류도 0 → **`verified: false` 라 로더가 다 껐다.** 리포트의 `⏸ 확인 대기` 목록을 보고, 실제로 열어 본 피드만 `verified: true` 로 올린다.
+- ❌ `⛔ 응답 검증 실패` — 200을 받았지만 피드가 아니었다는 뜻이다. 사유가 그대로 찍힌다:
+  - `오류 페이지로 리다이렉트` → 그 주소는 RSS가 아니다. 매체 RSS 목록을 다시 찾을 것 (이데일리 `/rss/` 가 이 경우였다).
+  - `200 이지만 XML 아님` → 로그인/차단 페이지일 수 있다. 브라우저로 같은 주소를 열어 확인.
+  - `피드 구조는 맞지만 item/entry 0건` → 섹션이 비었거나 폐지됐다.
 - ❌ 전 피드 오류(`URLError`/timeout) → 아웃바운드 차단. 사내 프록시 환경변수(`HTTPS_PROXY`) 확인. **이 상태에서 파이프라인을 돌리면 S1이 `failed`(전 소스 실패)로 찍힌다.**
 - ❌ 특정 매체만 403 → User-Agent 차단. `rss.USER_AGENT` 를 바꾸거나 그 매체는 구글 경로에 맡긴다.
 - ❌ 구글 RSS만 429/403 → 비공식 엔드포인트 차단(P1-3 리스크). **RSS 1순위가 살아 있으면 파이프라인은 계속 돈다.** 미등록 매체 후보 집계만 못 하게 되므로 그동안은 수동으로 매체를 넓힌다.

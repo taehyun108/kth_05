@@ -360,6 +360,16 @@ def coverage_lines(cov: dict[str, Any], top: int = 10) -> list[str]:
             age = ages.get(fid)
             mark = "" if age is None else f" ({age}일 전)"
             lines.append(f"    - {fid}: {day}{mark}")
+    invalid = cov.get("invalid_feeds") or {}
+    if invalid:
+        # ★200 을 받았지만 피드가 아니었던 것★ — 사유를 그대로 보여준다
+        lines.append("  ⛔ 응답 검증 실패(200 이어도 수집 실패로 기록):")
+        for fid, why in list(invalid.items())[:top]:
+            lines.append(f"    - {fid}: {why}")
+    pending = cov.get("pending_feeds") or []
+    if pending:
+        lines.append(f"  ⏸ 확인 대기(verified:false 라 미실행) {len(pending)}건: "
+                     + ", ".join(pending[:top]) + (" …" if len(pending) > top else ""))
     dead = cov.get("dead_feeds") or []
     if dead:
         lines.append(f"  ⚠️ 죽은 피드 의심(연속 0건): {', '.join(dead)} → rss_sources.yaml URL 확인")

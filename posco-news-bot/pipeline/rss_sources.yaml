@@ -4,8 +4,11 @@
 # keywords.yaml 기준으로 걸러낸다★. 따라서 매체를 등록한 만큼만 커버된다.
 # → 누락 감시는 S8 리포트의 '매체별 수집 건수 / 죽은 피드 / 미등록 매체 후보' 로 한다.
 #
-# ⚠️ 아래 url 은 ★예시 3건(플레이스홀더)★ 이다. Z2 에서 실제 주소를 확인해 채우고
-#    verified: true 로 바꾼다. verified:false 인 피드는 실패해도 경고 수준만 올린다.
+# ★규칙: verified: false 인 피드는 로더가 강제로 비활성한다(예외 없음).★
+#    enabled: true 로 적어도 켜지지 않는다 — 확인된 것만 돈다.
+#    실제로 열어 보고 ① 200 ② Content-Type 이 xml ③ 루트가 rss/feed
+#    ④ item 1건 이상 ⑤ 최신 기사일이 최근 인 것을 본 뒤 verified: true 로 올린다.
+#    (근거: 전자신문 섹션 번호 추정이 틀렸고, 이데일리 /rss/ 는 200 을 주는 오류 페이지였다)
 version: 1
 
 defaults:
@@ -20,9 +23,9 @@ sources:
     section: economy
     url: https://www.yna.co.kr/rss/economy.xml
     lang: ko
-    enabled: true
-    verified: false        # ← Z2 에서 확인 후 true
-    notes: "경제 섹션. 통신사라 전재 원본이 많아 dedup 대표로 자주 선정된다."
+    enabled: false         # ← verified 아니면 어차피 로더가 끈다. 표기도 맞춰 둔다
+    verified: false        # ★주소 미확인★ 추정으로 적은 것. Z2 에서 실제 주소부터 확인
+    notes: "경제 섹션. 통신사라 전재 원본이 많아 dedup 대표로 자주 선정된다. 주소 미검증."
 
   # ── 전자신문 (2026-09-01 실호출 확인) ──────────────────────────────────
   # 공식 RSS 목록: https://www.etnews.com/rss/  (200 · 전 섹션 40개)
@@ -141,11 +144,24 @@ sources:
     enabled: true
     verified: true               # 2026-09-01 실호출: 200 text/xml · 50건 · 당일 기사
     max_items: 100
+    # ★1차 필터★ 전 분야 firehose 라 카테고리로 먼저 줄이고, 그다음 keywords.yaml 로 거른다.
+    # 실호출에서 확인한 카테고리 값 기준. 부분일치이며, category 가 빈 항목은 버리지 않는다.
+    category_filter:
+      - "산업"          # 산업/통상
+      - "정책"
+      - "전자"
+      - "경제"          # 경제/금융
+      - "과학"
+      - "국제"
+      - "기업"
+      - "증권"
     notes: >
       전 분야가 오지만 ★<category> 가 채워져 온다★(산업/통상·금융·정책·전자 …).
       같은 기사가 카테고리만 바꿔 2건으로 오는 경우가 있다 → dedup L1(canonical URL)이 병합한다.
       응답이 UTF-8 BOM 으로 시작한다(파서 확인 완료).
-      https 는 미확인 — 목록에 있는 대로 http 로 둔다. Z2 에서 https 가 되면 바꿀 것.
+      ⚠️ https 는 ★TLS 실패★ (2026-09-01 확인: rss.edaily.co.kr 인증서 협상 불가) → http 유지.
+      평문이라 경로상 변조 가능성이 있다. 수집 전용·읽기 전용이라 수용하되, 발송 근거로
+      쓰이는 만큼 Z2 에서 https 가 열리면 즉시 교체할 것.
 
   - id: federal-register-energy
     name: Federal Register
@@ -153,7 +169,7 @@ sources:
     section: policy
     url: https://www.federalregister.gov/api/v1/documents.rss?conditions%5Bterm%5D=battery
     lang: en
-    enabled: true
+    enabled: false         # ★주소 미확인★
     verified: false
     stale_days: 7          # 관보는 매일 나온다. 일주일 비면 이상
     source_type: gazette   # 관보 → policy_stage 판정의 강한 신호 (stagers.py)
