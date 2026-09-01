@@ -45,31 +45,107 @@ sources:
     lang: ko
     enabled: true
     verified: true               # 2026-09-01 실호출: 200 text/xml · 50건 · 파싱 정상
+    stale_days: 14               # 피드별 정체 임계(미지정 시 기본 14일)
     notes: >
       ⚠️ 실호출 시점 최신 기사가 2026-06-25 로 ★68일 정체★ 상태였다(LAST UPDATED 주석 동일).
       200 이 와도 갱신이 멈춘 피드가 있다 → coverage.stale_feeds 로 감시한다.
       Z2 에서 다시 확인해 여전히 정체면 etnews-breaking 으로 대체하고 enabled:false.
 
-  # 아래는 공식 RSS 목록 페이지에서 확인한 주소(개별 실호출 전 → verified:false)
+  # ── 아래는 공식 RSS 목록 페이지(2026-09-01 실호출, 200)에서 ★주소만★ 확보한 것.
+  #    개별 피드는 아직 안 불러봤다 → enabled:false · verified:false.
+  #    Z2 에서 하나씩 열어 200·XML·최신 기사일을 확인하고 켠다.
+  #    전자신문 RSS 는 총 40개. 우리 용도(T1·T2·T3)와 무관한 섹션(연예·스포츠·게임 등)은 뺐다.
   - id: etnews-parts
     name: 전자신문
     tier: 2
-    section: parts
+    section: parts              # 전자>부품 — 소재 피드 정체 시 1순위 대체
     url: https://rss.etnews.com/06062.xml
     lang: ko
     enabled: false
     verified: false
-    notes: "전자>부품. 소재 피드가 정체 상태라 대체 후보."
+
+  - id: etnews-equipment
+    name: 전자신문
+    tier: 2
+    section: equipment          # 전자>장비 — 전극공정·소성로(battery/equip)
+    url: https://rss.etnews.com/06061.xml
+    lang: ko
+    enabled: false
+    verified: false
+
+  - id: etnews-electronics
+    name: 전자신문
+    tier: 2
+    section: electronics        # 전자 상위 — 06061~06065 를 포괄(중복 주의)
+    url: https://rss.etnews.com/06.xml
+    lang: ko
+    enabled: false
+    verified: false
+    notes: "하위 섹션을 다 켜면 중복이 커진다. 상위 하나만 켜는 편이 나을 수 있다."
+
+  - id: etnews-heavy
+    name: 전자신문
+    tier: 3
+    section: heavy-industry     # 전자>중공업 — 철강 인접
+    url: https://rss.etnews.com/06065.xml
+    lang: ko
+    enabled: false
+    verified: false
+
+  - id: etnews-economy
+    name: 전자신문
+    tier: 2
+    section: economy            # 경제 상위 (02024 는 하위 '경제')
+    url: https://rss.etnews.com/02.xml
+    lang: ko
+    enabled: false
+    verified: false
+
+  - id: etnews-mobility
+    name: 전자신문
+    tier: 2
+    section: mobility           # 모빌리티 — 전기차 수요(battery/demand)
+    url: https://rss.etnews.com/17.xml
+    lang: ko
+    enabled: false
+    verified: false
 
   - id: etnews-policy
     name: 전자신문
     tier: 2
-    section: policy
+    section: policy             # 정치·정책>정책 — T3
     url: https://rss.etnews.com/22210.xml
     lang: ko
     enabled: false
     verified: false
-    notes: "정책 섹션 — T3 보강 후보."
+
+  - id: etnews-global
+    name: 전자신문
+    tier: 3
+    section: global             # 국제 — T4 통상 보조
+    url: https://rss.etnews.com/12.xml
+    lang: ko
+    enabled: false
+    verified: false
+
+  # ── 이데일리 (2026-09-01 실호출 확인) ──────────────────────────────────
+  # ⚠️ https://www.edaily.co.kr/rss/ 는 200 을 주지만 ASP.NET 오류 폴백 페이지다
+  #    (?aspxerrorpath=/rss/ 로 넘어간다). 섹션별 RSS 목록을 사이트에서 찾을 수 없었다.
+  #    푸터의 RSS 링크로 확인된 것은 아래 ★전체뉴스 1개★ 뿐이다.
+  - id: edaily-all
+    name: 이데일리
+    tier: 1
+    section: all                 # 전 분야 firehose
+    url: http://rss.edaily.co.kr/edaily_news.xml
+    lang: ko
+    enabled: true
+    verified: true               # 2026-09-01 실호출: 200 text/xml · 50건 · 당일 기사
+    max_items: 100
+    notes: >
+      전 분야가 오지만 ★<category> 가 채워져 온다★(산업/통상·금융·정책·전자 …).
+      같은 기사가 카테고리만 바꿔 2건으로 오는 경우가 있다 → dedup L1(canonical URL)이 병합한다.
+      응답이 UTF-8 BOM 으로 시작한다(파서 확인 완료).
+      https 는 미확인 — 목록에 있는 대로 http 로 둔다. Z2 에서 https 가 되면 바꿀 것.
 
   - id: federal-register-energy
     name: Federal Register
@@ -79,5 +155,6 @@ sources:
     lang: en
     enabled: true
     verified: false
+    stale_days: 7          # 관보는 매일 나온다. 일주일 비면 이상
     source_type: gazette   # 관보 → policy_stage 판정의 강한 신호 (stagers.py)
     notes: "T3 정책 원문. Proposed Rule/Final Rule 이 그대로 제목에 들어온다."

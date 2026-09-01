@@ -350,14 +350,25 @@ def coverage_lines(cov: dict[str, Any], top: int = 10) -> list[str]:
     zero_feeds = sorted(f for f, n in (cov.get("feed_counts") or {}).items() if n == 0)
     if zero_feeds:
         lines.append(f"  이번 실행 0건 피드: {', '.join(zero_feeds)}")
+    # ★최신 기사 날짜는 판정과 무관하게 항상 싣는다★ — 정체는 서서히 온다. 추세를 눈으로 봐야 한다.
+    newest = cov.get("feed_newest") or {}
+    if newest:
+        ages = cov.get("feed_age_days") or {}
+        lines.append("  피드별 최신 기사:")
+        for fid in sorted(newest, key=lambda f: -ages.get(f, 0)):
+            day = (newest[fid] or "")[:10]
+            age = ages.get(fid)
+            mark = "" if age is None else f" ({age}일 전)"
+            lines.append(f"    - {fid}: {day}{mark}")
     dead = cov.get("dead_feeds") or []
     if dead:
         lines.append(f"  ⚠️ 죽은 피드 의심(연속 0건): {', '.join(dead)} → rss_sources.yaml URL 확인")
     stale = cov.get("stale_feeds") or {}
     if stale:
         # 건수는 정상인데 내용이 낡은 피드. 0건 감시로는 절대 안 잡히는 고장 모드다.
-        lines.append("  ⚠️ 정체된 피드(200 은 오지만 갱신 멈춤): "
-                     + ", ".join(f"{k} {v}일 경과" for k, v in list(stale.items())[:top])
+        per = cov.get("stale_thresholds") or {}
+        parts = [f"{k} {v}일 경과(기준 {per.get(k, 14)}일)" for k, v in list(stale.items())[:top]]
+        lines.append("  ⚠️ 정체된 피드(200 은 오지만 갱신 멈춤): " + ", ".join(parts)
                      + " → 섹션 폐지 여부 확인 후 대체 피드로 교체")
     unreg = cov.get("unregistered_outlets") or {}
     if unreg:

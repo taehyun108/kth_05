@@ -352,17 +352,51 @@ def test_single_digit_day_rfc822_parses():
 def test_feed_with_no_category_still_filters(keywords):
     """전자신문 피드에는 <category> 가 아예 없다 → 제목·설명만으로 걸러져야 한다.
 
-    ★실호출에서 드러난 커버리지 구멍을 함께 고정한다★
-    '동화일렉트로라이트, 건식 기반 음극 소재…' 는 퓨처엠 주력(음극재) 기사인데 탈락한다.
-    keywords.yaml battery/tech 의 must 가 '건식전극'·'실리콘음극' 이라 띄어쓴 '건식 기반 음극'
-    과 매칭되지 않기 때문이다. 사전을 넓히면 이 테스트가 깨지면서 변화가 드러난다.
+    ★2026-09 사전 확장으로 메워진 구멍★
+    이전엔 '동화일렉트로라이트, 건식 기반 음극 소재…'(퓨처엠 주력 음극재)가 탈락했다.
+    must 가 '건식전극'·'실리콘음극' 뿐이라 띄어쓴 '건식 기반 음극'과 매칭되지 않아서다.
+    지금은 must 에 음극재/음극소재를 넣고 공백 제거 매칭을 쓰므로 둘 다 통과한다.
     """
     items = rss.parse_items(ETNEWS_STALE.encode("utf-8"), ETNEWS_SRC)
     assert all(i["categories"] == [] for i in items)
     kept, dropped = s1_collect.filter_rss_records(items, keywords)
-    assert [k["title"][:5] for k in kept] == ["이녹스리튬"]     # 전고체 → battery/tech
-    assert kept[0]["track"] == "battery"
-    assert dropped == 1                                        # ← 음극재 기사 탈락(구멍)
+    assert len(kept) == 2 and dropped == 0
+    assert {k["title"][:5] for k in kept} == {"이녹스리튬", "동화일렉트"}
+    assert all(k["track"] == "battery" for k in kept)
+
+
+# ── ⑩ 사전 확장 (2026-09) — 띄어쓰기 변형 흡수 ──────────────────────────────
+
+@pytest.mark.parametrize("text,expect", [
+    ("건식 기반 음극 소재 개발 국책과제", ("battery", "mat-kr")),      # 띄어쓴 '음극 소재'
+    ("포스코퓨처엠 양극 활물질 라인 증설", ("posco", "futurem")),       # 포스코 우선
+    ("LG화학 전구체 합작사 설립", ("battery", "mat-kr")),
+    ("에코프로비엠 양극재 증설", ("battery", "mat-kr")),
+    ("삼성 SDI 신규 라인 가동", ("battery", "cell-kr")),              # '삼성SDI' 사전 ↔ 띄어쓴 표기
+])
+def test_squash_matching_absorbs_spacing(keywords, text, expect):
+    assert expect in s1_collect.match_keywords(text, keywords)
+
+
+def test_squash_does_not_swallow_unrelated_text(keywords):
+    """공백 제거가 아무거나 다 통과시키면 안 된다."""
+    assert s1_collect.match_keywords("프로야구 개막전 매진", keywords) == []
+    assert s1_collect.match_keywords("부산국제영화제 10월 6일 개막", keywords) == []
+
+
+def test_dictionary_expansion_is_measured(keywords):
+    """★확장분이 실제로 무엇을 더 잡는지 고정한다★
+
+    scripts/measure_keywords.py 로 실호출 피드(전자신문 소재 50건)를 측정한 결과:
+      확장 전 6건 통과(12%) → 확장 후 7건 통과(14%) · +1건
+    아래는 그 +1건의 정체다. 사전을 되돌리면 이 테스트가 깨진다.
+    """
+    from scripts.measure_keywords import baseline_keywords
+    text = "동화일렉트로라이트, 건식 기반 음극 소재 개발 국책과제 주관사 선정"
+    assert s1_collect.match_keywords(text, baseline_keywords(keywords)) == []   # 확장 전: 탈락
+    assert ("battery", "mat-kr") in s1_collect.match_keywords(text, keywords)   # 확장 후: 통과
+
+
 
 
 def test_stale_feed_detected_even_though_items_are_plenty():
@@ -384,6 +418,42 @@ def test_stale_feed_detected_even_though_items_are_plenty():
 def test_fresh_feed_is_not_flagged_stale():
     fresh = {"a-ilbo": common.now_kst().isoformat()}
     assert s1_collect.stale_feeds(fresh) == {}
+
+
+def test_stale_threshold_is_per_feed():
+    """주간 갱신 섹션 피드를 오탐하지 않도록 피드별 임계를 준다."""
+    fresh = {"weekly-feed": "2026-08-12T09:00:00+09:00",      # 20일 전
+             "daily-feed": "2026-08-25T09:00:00+09:00"}       # 7일 전
+    now = datetime(2026, 9, 1, 9, 0, tzinfo=common.KST)
+    # 기본 14일: weekly 만 걸린다
+    assert set(s1_collect.stale_feeds(fresh, now=now)) == {"weekly-feed"}
+    # weekly-feed 는 30일까지 정상으로 본다 → 아무것도 안 걸림
+    assert s1_collect.stale_feeds(fresh, now=now, thresholds={"weekly-feed": 30}) == {}
+    # daily-feed 를 3일 기준으로 조이면 걸린다
+    got = s1_collect.stale_feeds(fresh, now=now, thresholds={"weekly-feed": 30, "daily-feed": 3})
+    assert got == {"daily-feed": 7}
+
+
+def test_stale_thresholds_read_from_sources_yaml():
+    cfg = rss.load_sources()
+    th = s1_collect.stale_thresholds(cfg)
+    assert th, "rss_sources.yaml 에 stale_days 예시가 최소 1건 있어야 한다"
+    assert all(isinstance(v, int) and v > 0 for v in th.values())
+
+
+def test_report_always_shows_newest_article_date():
+    """판정과 무관하게 최신 기사 날짜를 항상 싣는다 — 추세를 눈으로 보려고."""
+    cov = {
+        "by_source": {"rss": 2}, "by_outlet": {"가나일보": 2},
+        "feed_counts": {"a-ilbo": 2}, "dead_feeds": [],
+        "feed_newest": {"a-ilbo": "2026-09-01T09:00:00+09:00"},
+        "feed_age_days": {"a-ilbo": 0},
+        "stale_feeds": {}, "stale_thresholds": {}, "unregistered_outlets": {},
+        "source_tried": 1, "source_ok": 1,
+    }
+    text = "\n".join(orch.coverage_lines(cov))
+    assert "피드별 최신 기사:" in text
+    assert "a-ilbo: 2026-09-01 (0일 전)" in text
 
 
 # ── ⑧ 네이버 HUB 는 기본 비활성 ─────────────────────────────────────────────

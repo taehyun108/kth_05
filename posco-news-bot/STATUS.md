@@ -61,7 +61,7 @@ tests/              pytest(파이프라인·INV) + tests/web(node --test)
 | 항목 | 막는 것 | 풀리면 할 일 |
 |---|---|---|
 | **`rss_sources.yaml` 실주소** | 전자신문 2건만 실호출 확인(`verified: true`). 연합뉴스·Federal Register 등 나머지는 미확인 | Z2에서 주소 확인 → 스모크로 파싱 편차·신선도 확인 → `verified: true` |
-| **`keywords.yaml` 음극재 사전** | 실호출에서 음극재 기사 탈락 확인(아래 §7) | `must` 에 음극재/양극재 계열 추가 여부 결정 (물량 영향 있음 — 사람 판단) |
+| ~~`keywords.yaml` 음극재 사전~~ | **해소(2026-09-01)** — must 확장 + 공백 제거 매칭 | — |
 | **s3_fetch 실크롤러** | Z2 스모크 결과(실응답 필드 매핑·인코딩 미검증) | 스모크 리포트 → trafilatura→readability→newspaper3k 구현 |
 | **L1 모델 확정** | P0-5 A/B 미실행(Ollama·실기사 20건 필요) | 포맷 통과율+사람 채점 → 모델·프롬프트 확정 |
 | **카톡 실발송** | 카카오 오픈채팅 API 승인 + L1 미확정(현재 전부 extractive→스킵) | 승인 후 `dispatch_routes.yaml`의 `room_id_env`만 채움 |
@@ -146,9 +146,14 @@ S7 발송     카톡 0(route disabled) · 메일 Part A 9 + Part B 12
 
 | 대상 | 결과 |
 |---|---|
-| `https://www.etnews.com/rss/` (공식 RSS 목록) | **200** · 40개 섹션 주소 확보 |
-| `https://rss.etnews.com/Section902.xml` | **200 · text/xml** · RSS 2.0 · 30건 · 당일 기사 · 파싱 정상 |
+| `https://www.etnews.com/rss/` (공식 RSS 목록) | **200** · RSS 주소 **40개** 전량 확보 |
+| `https://rss.etnews.com/Section902.xml` (뉴스속보) | **200 · text/xml** · RSS 2.0 · 30건 · 당일 기사 · 파싱 정상 |
 | `https://rss.etnews.com/06064.xml` (전자>소재) | **200 · text/xml** · 50건 · 파싱 정상 · ⚠️ **최신 기사 2026-06-25 = 68일 정체** |
+| `https://www.edaily.co.kr/rss/` | **200 이지만 실제로는 오류 폴백** (`?aspxerrorpath=/rss/` 로 이동). 섹션별 RSS 목록 없음 |
+| `http://rss.edaily.co.kr/edaily_news.xml` (전체뉴스) | **200 · text/xml** · 50건 · 당일 기사 · `<category>` 채워짐 · UTF-8 BOM · 파싱 정상 |
+
+> ⚠️ 첫 보고에서 "RSS 목록 200 · 40개 확보"라고 썼지만, 그 시점엔 목록 페이지를 부르지 않고
+> 개별 피드 2건만 불렀다. **지금은 실제로 목록 페이지를 불러 40개를 확보했다.**
 
 **섹션 번호 정정:** `Section902.xml` 은 배터리가 아니라 **'뉴스속보'**(전 분야 혼재)다.
 플레이스홀더에 `section: battery` 로 적어 둔 추정이 틀렸다. 배터리·소재는 `06064.xml`(소재), `06062.xml`(부품).
@@ -166,3 +171,45 @@ S7 발송     카톡 0(route disabled) · 메일 Part A 9 + Part B 12
    `keywords.yaml` battery/tech 의 must 가 `건식전극`·`실리콘음극` 이라 띄어쓴 '건식 기반 음극'과 매칭되지 않는다.
    음극재는 퓨처엠 주력이라 놓치면 안 되는 건이지만, `음극재`·`양극재` 를 must 에 넣으면 물량이 크게 늘어난다 → **사전 확장 여부는 결정 필요.**
    현재는 탈락하는 사실을 테스트로 고정해 뒀다(사전을 넓히면 그 테스트가 깨지며 변화가 드러난다).
+
+---
+
+## 8. Z2 확인 목록 (여기 있는 것만 확인하면 된다)
+
+샌드박스는 아웃바운드가 막혀 있어 위 §7 검증은 **Firecrawl 경유**였다.
+Z2 에서는 우리 러너가 직접 부르므로 **UA 차단·프록시·https 지원 여부가 다를 수 있다.**
+아래를 `python -m scripts.smoke_collect --feed <id>` 로 하나씩 확인하고 결과를 알려줄 것.
+
+### ① 활성 피드 재확인 (지금 `enabled: true`)
+
+| 피드 id | URL | 확인할 것 |
+|---|---|---|
+| `etnews-breaking` | `rss.etnews.com/Section902.xml` | 200 · 당일 기사 · 키워드 통과율(전 분야라 낮은 게 정상) |
+| `etnews-material` | `rss.etnews.com/06064.xml` | ★**아직도 정체인지**★ 최신 기사일 확인. 계속 멈춰 있으면 `enabled: false` 로 내리고 `etnews-parts` 로 대체 |
+| `edaily-all` | `rss.edaily.co.kr/edaily_news.xml` | 200 · **https 로도 되는지** (지금은 http) · 같은 기사 중복(카테고리 2건) 병합 여부 |
+| `yonhap-economy` | `www.yna.co.kr/rss/economy.xml` | **미확인 주소** — 실제 연합뉴스 RSS 주소가 맞는지부터 |
+| `federal-register-energy` | `federalregister.gov/api/v1/documents.rss?...` | **미확인** · 영문 · `source_type: gazette` 로 policy_stage 판정되는지 |
+
+### ② 전자신문 대기 피드 (지금 `enabled: false`, 주소만 확보)
+
+`etnews-parts`(부품) · `etnews-equipment`(장비) · `etnews-electronics`(전자 상위) ·
+`etnews-heavy`(중공업) · `etnews-economy`(경제) · `etnews-mobility`(모빌리티) ·
+`etnews-policy`(정책) · `etnews-global`(국제)
+
+- 각각 200·XML·최신 기사일을 보고 쓸 것만 `enabled: true` + `verified: true`.
+- **`etnews-electronics`(06.xml)는 06061~06065 를 포괄할 가능성이 높다.** 상위 하나만 켜는 게 나은지, 하위만 켜는 게 나은지 중복 건수를 보고 판단할 것.
+
+### ③ 이데일리 섹션 피드 찾기
+
+전체뉴스 firehose 하나만 확보했다. 섹션별 주소가 있으면 알려줄 것 —
+사이트에서는 못 찾았다(RSS 목록 페이지가 죽어 있음). 없으면 firehose + `<category>` 필터로 간다.
+
+### ④ 사전 확장 후 물량 재측정
+
+`python -m scripts.measure_keywords` — 지금은 제목 50건 기준 **+1건(12%→14%)** 이지만,
+실제 수집은 description 까지 보므로 더 늘어난다. Z2 실수집 후 `daily_cap`(mat-kr 20) 재조정 여부 판단.
+
+### ⑤ 정체 임계 조정
+
+주간 갱신이 정상인 섹션이 있으면 `rss_sources.yaml` 의 해당 피드에 `stale_days: 30` 처럼 개별 지정.
+S8 리포트의 `피드별 최신 기사:` 를 며칠 보고 정할 것.

@@ -24,6 +24,7 @@ from pipeline.stages import common, s1_collect, s2_normalize  # noqa: E402
 from pipeline.stages.relevance import posco_relevance  # noqa: E402
 
 KW = common.load_keywords()
+MAT_CAP = KW["tracks"]["battery"]["mat-kr"]["daily_cap"]   # 상한은 사전에서 읽는다
 NOW = common.now_kst()
 
 
@@ -105,8 +106,8 @@ def test_four_tracks_dedup_and_cap():
     collected.append(rec(track="battery", category="cell-kr",
                          title="삼성SDI 전고체 파일럿 가동 개시", url="https://d.com/2", outlet="이데일리"))
 
-    # 상한 초과: battery mat-kr cap=12, 비면제 13건 → 1건 컷
-    for i in range(13):
+    # 상한 초과: 비면제 (cap+1)건 → 1건 컷
+    for i in range(MAT_CAP + 1):
         collected.append(rec(track="battery", category="mat-kr",
                              title=f"에코프로비엠 증설 계획 발표 {i:02d}",
                              url=f"https://e.com/mat/{i}", outlet="한국경제"))
@@ -120,7 +121,7 @@ def test_four_tracks_dedup_and_cap():
     # 상한 컷 동작
     assert c["dropped_by_cap"] >= 1
     mat = [a for a in res["articles"] if a["category"] == "mat-kr"]
-    assert len(mat) == 12                                  # cap 정확히 적용
+    assert len(mat) == MAT_CAP                             # cap 정확히 적용
     # 4트랙 모두 존재
     assert set(c["by_track"]) >= {"posco", "battery", "policy", "trade"}
 
@@ -136,8 +137,8 @@ def test_four_tracks_dedup_and_cap():
 
 def test_cap_exemption_for_posco_and_representative():
     collected = []
-    # 비면제 필러 13건 (cap 12 초과) — 낮지 않은 prescore
-    for i in range(13):
+    # 비면제 필러 (cap+1)건 — 낮지 않은 prescore
+    for i in range(MAT_CAP + 1):
         collected.append(rec(track="battery", category="mat-kr",
                              title=f"엘앤에프 양극재 공급 계약 {i:02d}",
                              url=f"https://f.com/{i}", outlet="한국경제"))
@@ -166,9 +167,9 @@ def test_cap_exemption_for_posco_and_representative():
     assert posco_art["posco_relevance"] in ("primary", "mention")
     assert wire_art["cap_exempt"] is True
     assert len(wire_art["sources"]) > 1
-    # 비면제 필러는 cap 12 로 컷 (13 → 12)
+    # 비면제 필러는 cap 으로 컷 (cap+1 → cap)
     fillers = [a for a in mat.values() if a["title"].startswith("엘앤에프")]
-    assert len(fillers) == 12
+    assert len(fillers) == MAT_CAP
     assert res["meta"]["counts"]["dropped_by_cap"] >= 1
 
 

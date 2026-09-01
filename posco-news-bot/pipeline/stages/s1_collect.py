@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -70,23 +71,50 @@ def _http_get(url: str, headers: dict[str, str] | None = None) -> bytes:
 
 # ── 키워드 매칭 (RSS 필터 게이트) ────────────────────────────────────────────
 
+_WS_ALL = re.compile(r"\s+")
+
+
+def _squash(text: str) -> str:
+    """공백 제거 + 소문자화. ★띄어쓰기 변형 흡수용★
+
+    한국어 기사는 같은 개념을 띄어쓰기만 바꿔 쓴다:
+      '음극 소재' · '음극소재' / '양극 활물질' · '양극활물질' / '건식 기반 음극' …
+    사전에 모든 변형을 넣는 대신, 양쪽에서 공백을 지우고 비교한다.
+
+    부작용: 단어 경계를 넘어 붙는 오탐이 생길 수 있다('음극 재활용'→'음극재활용' ⊃ '음극재').
+    이 도메인에서는 그 오탐도 대개 배터리 소재 기사라 수용 가능하다고 판단했다.
+    최종 판정이 아니라 ★수집 후보 선별★ 단계라는 점도 근거다(하류 prescore·dedup 이 더 거른다).
+    """
+    return _WS_ALL.sub("", (text or "")).lower()
+
+
+def _contains(text_low: str, text_squashed: str, kw: str) -> bool:
+    """원문 그대로 / 공백 제거본 둘 중 하나라도 걸리면 히트."""
+    if not kw:
+        return False
+    k = kw.lower()
+    return k in text_low or _squash(kw) in text_squashed
+
+
 def match_keywords(text: str, keywords: dict[str, Any]) -> list[tuple[str, str]]:
     """텍스트가 어느 (track, category) 에 걸리는지. must 키워드가 게이트다.
 
     질의 기반 수집과 동일한 기준을 유지하려고 must 만 본다(expand 는 prescore 에서).
     추가로 posco_entities 에 걸리면 posco 트랙으로 편입한다 — 카톡 게이트 커버리지 보호.
+    매칭은 원문과 공백 제거본 양쪽으로 본다(_squash).
     """
     low = (text or "").lower()
+    squashed = _squash(text)
     hits: list[tuple[str, str]] = []
     for track, cats in (keywords.get("tracks") or {}).items():
         for category, cfg in (cats or {}).items():
             for kw in cfg.get("must") or []:
-                if kw and kw.lower() in low:
+                if _contains(low, squashed, kw):
                     hits.append((track, category))
                     break
     if not any(t == "posco" for t, _ in hits):
         for aliases in (keywords.get("posco_entities") or {}).values():
-            if any(a and a.lower() in low for a in aliases):
+            if any(_contains(low, squashed, a) for a in aliases):
                 hits.append(("posco", "group"))
                 break
     return hits
@@ -236,28 +264,49 @@ def feed_freshness(raw_items: list[dict[str, Any]]) -> dict[str, str]:
     return newest
 
 
-def stale_feeds(freshness: dict[str, str], threshold_days: int = STALE_FEED_DAYS,
-                now: Any = None) -> dict[str, int]:
-    """200 은 오지만 갱신이 멈춘 피드 → {feed_id: 경과일}.
+def stale_thresholds(cfg: dict[str, Any] | None) -> dict[str, int]:
+    """피드별 stale_days. 미지정이면 기본 STALE_FEED_DAYS.
 
-    ★죽은 피드(0건)와 다른 고장 모드다.★ 기사를 가득 주지만 전부 과거 것이라
-    건수 기반 감시로는 영원히 안 잡힌다. 실제로 전자신문 소재 피드가 이 상태였다.
+    주간 단위로 갱신되는 섹션 피드가 있어서 14일 일괄 기준은 정상 피드를 오탐한다.
+    → rss_sources.yaml 에서 피드마다 stale_days 를 따로 준다.
     """
+    out: dict[str, int] = {}
+    for src in (cfg or {}).get("sources", []) or []:
+        fid = src.get("id")
+        if fid and src.get("stale_days"):
+            out[fid] = int(src["stale_days"])
+    return out
+
+
+def feed_age_days(freshness: dict[str, str], now: Any = None) -> dict[str, int]:
+    """피드별 최신 기사 경과일. 판정과 무관하게 리포트에 항상 싣는다(추세 관찰용)."""
     now = now or common.now_kst()
     out: dict[str, int] = {}
     for fid, iso in freshness.items():
         dt = common.parse_dt(iso)
-        if dt is None:
-            continue
-        age = (now - dt).days
-        if age >= threshold_days:
-            out[fid] = age
+        if dt is not None:
+            out[fid] = (now - dt).days
+    return out
+
+
+def stale_feeds(freshness: dict[str, str], threshold_days: int = STALE_FEED_DAYS,
+                now: Any = None, thresholds: dict[str, int] | None = None) -> dict[str, int]:
+    """200 은 오지만 갱신이 멈춘 피드 → {feed_id: 경과일}.
+
+    ★죽은 피드(0건)와 다른 고장 모드다.★ 기사를 가득 주지만 전부 과거 것이라
+    건수 기반 감시로는 영원히 안 잡힌다. 실제로 전자신문 소재 피드가 이 상태였다.
+    임계는 피드별(stale_days) → 없으면 threshold_days.
+    """
+    ages = feed_age_days(freshness, now)
+    per = thresholds or {}
+    out = {fid: age for fid, age in ages.items() if age >= per.get(fid, threshold_days)}
     return dict(sorted(out.items(), key=lambda kv: -kv[1]))
 
 
 def build_coverage(records: list[dict[str, Any]], feed_counts: dict[str, int],
                    registered_outlets: set[str], health: dict[str, Any] | None = None,
-                   freshness: dict[str, str] | None = None) -> dict[str, Any]:
+                   freshness: dict[str, str] | None = None,
+                   thresholds: dict[str, int] | None = None) -> dict[str, Any]:
     """매체별 건수 · 소스별 건수 · 죽은 피드 · 정체 피드 · RSS 미등록 매체 후보."""
     by_outlet: dict[str, int] = {}
     by_source: dict[str, int] = {}
@@ -277,7 +326,9 @@ def build_coverage(records: list[dict[str, Any]], feed_counts: dict[str, int],
         "feed_counts": feed_counts,
         "dead_feeds": dead_feeds(health or {}),
         "feed_newest": freshness or {},
-        "stale_feeds": stale_feeds(freshness or {}),
+        "feed_age_days": feed_age_days(freshness or {}),
+        "stale_feeds": stale_feeds(freshness or {}, thresholds=thresholds),
+        "stale_thresholds": thresholds or {},
         "unregistered_outlets": dict(sorted(unregistered.items(), key=lambda kv: -kv[1])),
     }
 
@@ -302,6 +353,7 @@ def collect(
     errors: list[dict[str, Any]] = []
     feed_counts: dict[str, int] = {}
     freshness: dict[str, str] = {}
+    rss_cfg_used: dict[str, Any] | None = None
     registered: set[str] = set()
     source_ok = 0
     source_tried = 0
@@ -310,6 +362,7 @@ def collect(
     if use_rss:
         source_tried += 1
         cfg = rss_cfg if rss_cfg is not None else rss.load_sources()
+        rss_cfg_used = cfg
         registered = {s.get("name") for s in cfg.get("sources", []) if s.get("name")}
         raw_items, rss_errors, feed_counts = rss.collect_feeds(cfg, rss_fetcher)
         freshness = feed_freshness(raw_items)
@@ -372,7 +425,8 @@ def collect(
                 source_ok += 1
 
     health = update_feed_health(feed_counts) if (track_health and feed_counts) else {}
-    coverage = build_coverage(records, feed_counts, registered, health, freshness)
+    coverage = build_coverage(records, feed_counts, registered, health, freshness,
+                              stale_thresholds(rss_cfg_used))
     coverage["source_tried"] = source_tried
     coverage["source_ok"] = source_ok
     return records, errors, coverage
