@@ -60,7 +60,8 @@ tests/              pytest(파이프라인·INV) + tests/web(node --test)
 
 | 항목 | 막는 것 | 풀리면 할 일 |
 |---|---|---|
-| **`rss_sources.yaml` 실주소** | Z2에서 매체별 RSS 주소 확인 필요(현재 예시 3건·`verified:false`) | 주소 채우고 스모크로 파싱 편차 확인 → `verified: true` |
+| **`rss_sources.yaml` 실주소** | 전자신문 2건만 실호출 확인(`verified: true`). 연합뉴스·Federal Register 등 나머지는 미확인 | Z2에서 주소 확인 → 스모크로 파싱 편차·신선도 확인 → `verified: true` |
+| **`keywords.yaml` 음극재 사전** | 실호출에서 음극재 기사 탈락 확인(아래 §7) | `must` 에 음극재/양극재 계열 추가 여부 결정 (물량 영향 있음 — 사람 판단) |
 | **s3_fetch 실크롤러** | Z2 스모크 결과(실응답 필드 매핑·인코딩 미검증) | 스모크 리포트 → trafilatura→readability→newspaper3k 구현 |
 | **L1 모델 확정** | P0-5 A/B 미실행(Ollama·실기사 20건 필요) | 포맷 통과율+사람 채점 → 모델·프롬프트 확정 |
 | **카톡 실발송** | 카카오 오픈채팅 API 승인 + L1 미확정(현재 전부 extractive→스킵) | 승인 후 `dispatch_routes.yaml`의 `room_id_env`만 채움 |
@@ -136,3 +137,32 @@ S7 발송     카톡 0(route disabled) · 메일 Part A 9 + Part B 12
 - 네이버 경로는 **삭제하지 않고 HUB 방식 어댑터로 비활성 보존** — `naverapihub.apigw.ntruss.com` `/search/v1/news`, 헤더 `X-NCP-APIGW-API-KEY-ID`/`X-NCP-APIGW-API-KEY`. `NAVER_HUB_KEY_ID`/`NAVER_HUB_KEY` 를 채우면 그때 켜진다(비면 호출조차 안 함).
 
 **검증:** `tests/test_p1b_rss.py` 24건 — pubDate 3종+ISO/naive, description 없는 피드, CDATA 제목, Atom 폴백, 피드별 fail-soft, 전 소스 실패 신호, 커버리지·죽은 피드·미등록 매체, HUB 비활성, `rss_sources.yaml` 스키마.
+
+---
+
+## 7. 실호출 검증 (2026-09-01, 전자신문)
+
+샌드박스는 아웃바운드가 막혀 있어 **Firecrawl 경유로 실제 호출**했다. Z2에서는 직접 호출로 재확인할 것.
+
+| 대상 | 결과 |
+|---|---|
+| `https://www.etnews.com/rss/` (공식 RSS 목록) | **200** · 40개 섹션 주소 확보 |
+| `https://rss.etnews.com/Section902.xml` | **200 · text/xml** · RSS 2.0 · 30건 · 당일 기사 · 파싱 정상 |
+| `https://rss.etnews.com/06064.xml` (전자>소재) | **200 · text/xml** · 50건 · 파싱 정상 · ⚠️ **최신 기사 2026-06-25 = 68일 정체** |
+
+**섹션 번호 정정:** `Section902.xml` 은 배터리가 아니라 **'뉴스속보'**(전 분야 혼재)다.
+플레이스홀더에 `section: battery` 로 적어 둔 추정이 틀렸다. 배터리·소재는 `06064.xml`(소재), `06062.xml`(부품).
+
+### 이 검증이 잡아낸 것 (합성 피드로는 안 나왔다)
+
+1. **정체된 피드 — 새 고장 모드.** 200 OK, 항목 50건, 파싱 정상인데 두 달째 갱신이 없다.
+   기존 '죽은 피드' 감시는 **0건**만 보므로 이 피드는 영원히 정상으로 보인다.
+   → `coverage.stale_feeds` (최신 기사 14일 경과) 신설 + S8 리포트 노출 + 테스트 고정.
+2. **channel `<image>` 블록.** 전자신문은 channel 안에 `<image><title><link>` 를 둔다.
+   `.//title` 류로 긁었으면 매 실행마다 가짜 기사 1건이 섞였을 것. 현재 파서는 `.//item` 기준이라 무사 — 회귀 테스트로 고정.
+3. **단일 자릿수 일자 RFC822** (`Tue, 1 Sep 2026`) — 정상 파싱 확인.
+4. **`<category>` 가 아예 없다** — 필터가 제목·설명만으로 동작해야 함을 확인.
+5. **커버리지 구멍(사람 판단 필요).** `동화일렉트로라이트, 건식 기반 음극 소재 개발 국책과제` 가 **탈락**했다.
+   `keywords.yaml` battery/tech 의 must 가 `건식전극`·`실리콘음극` 이라 띄어쓴 '건식 기반 음극'과 매칭되지 않는다.
+   음극재는 퓨처엠 주력이라 놓치면 안 되는 건이지만, `음극재`·`양극재` 를 must 에 넣으면 물량이 크게 늘어난다 → **사전 확장 여부는 결정 필요.**
+   현재는 탈락하는 사실을 테스트로 고정해 뒀다(사전을 넓히면 그 테스트가 깨지며 변화가 드러난다).

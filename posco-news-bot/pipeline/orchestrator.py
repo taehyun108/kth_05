@@ -353,6 +353,12 @@ def coverage_lines(cov: dict[str, Any], top: int = 10) -> list[str]:
     dead = cov.get("dead_feeds") or []
     if dead:
         lines.append(f"  ⚠️ 죽은 피드 의심(연속 0건): {', '.join(dead)} → rss_sources.yaml URL 확인")
+    stale = cov.get("stale_feeds") or {}
+    if stale:
+        # 건수는 정상인데 내용이 낡은 피드. 0건 감시로는 절대 안 잡히는 고장 모드다.
+        lines.append("  ⚠️ 정체된 피드(200 은 오지만 갱신 멈춤): "
+                     + ", ".join(f"{k} {v}일 경과" for k, v in list(stale.items())[:top])
+                     + " → 섹션 폐지 여부 확인 후 대체 피드로 교체")
     unreg = cov.get("unregistered_outlets") or {}
     if unreg:
         head = list(unreg.items())[:top]

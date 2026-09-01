@@ -42,6 +42,8 @@ GOOGLE_LOCALE = {
 }
 
 DEAD_FEED_DAYS = 3          # 연속 0건이 이 횟수 이상이면 '죽은 피드 의심'
+STALE_FEED_DAYS = 14        # ★200 이 와도 최신 기사가 이보다 오래면 '정체된 피드'★
+                            # (2026-09-01 전자신문 06064 소재 피드가 68일 정체 상태로 확인됨)
 
 
 def _clean(text: str | None) -> str:
@@ -222,9 +224,41 @@ def dead_feeds(health: dict[str, Any], threshold: int = DEAD_FEED_DAYS) -> list[
     return sorted(f for f, r in health.items() if int(r.get("consecutive_zero", 0)) >= threshold)
 
 
+def feed_freshness(raw_items: list[dict[str, Any]]) -> dict[str, str]:
+    """피드별 ★최신 기사 발행시각★. 건수만으로는 정체를 못 잡는다."""
+    newest: dict[str, str] = {}
+    for r in raw_items:
+        fid, pub = r.get("source_id"), r.get("published_at")
+        if not fid or not pub:
+            continue
+        if fid not in newest or pub > newest[fid]:
+            newest[fid] = pub
+    return newest
+
+
+def stale_feeds(freshness: dict[str, str], threshold_days: int = STALE_FEED_DAYS,
+                now: Any = None) -> dict[str, int]:
+    """200 은 오지만 갱신이 멈춘 피드 → {feed_id: 경과일}.
+
+    ★죽은 피드(0건)와 다른 고장 모드다.★ 기사를 가득 주지만 전부 과거 것이라
+    건수 기반 감시로는 영원히 안 잡힌다. 실제로 전자신문 소재 피드가 이 상태였다.
+    """
+    now = now or common.now_kst()
+    out: dict[str, int] = {}
+    for fid, iso in freshness.items():
+        dt = common.parse_dt(iso)
+        if dt is None:
+            continue
+        age = (now - dt).days
+        if age >= threshold_days:
+            out[fid] = age
+    return dict(sorted(out.items(), key=lambda kv: -kv[1]))
+
+
 def build_coverage(records: list[dict[str, Any]], feed_counts: dict[str, int],
-                   registered_outlets: set[str], health: dict[str, Any] | None = None) -> dict[str, Any]:
-    """매체별 건수 · 소스별 건수 · 죽은 피드 · RSS 미등록 매체 후보."""
+                   registered_outlets: set[str], health: dict[str, Any] | None = None,
+                   freshness: dict[str, str] | None = None) -> dict[str, Any]:
+    """매체별 건수 · 소스별 건수 · 죽은 피드 · 정체 피드 · RSS 미등록 매체 후보."""
     by_outlet: dict[str, int] = {}
     by_source: dict[str, int] = {}
     google_outlets: dict[str, int] = {}
@@ -242,6 +276,8 @@ def build_coverage(records: list[dict[str, Any]], feed_counts: dict[str, int],
         "by_source": by_source,
         "feed_counts": feed_counts,
         "dead_feeds": dead_feeds(health or {}),
+        "feed_newest": freshness or {},
+        "stale_feeds": stale_feeds(freshness or {}),
         "unregistered_outlets": dict(sorted(unregistered.items(), key=lambda kv: -kv[1])),
     }
 
@@ -265,6 +301,7 @@ def collect(
     records: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
     feed_counts: dict[str, int] = {}
+    freshness: dict[str, str] = {}
     registered: set[str] = set()
     source_ok = 0
     source_tried = 0
@@ -275,6 +312,7 @@ def collect(
         cfg = rss_cfg if rss_cfg is not None else rss.load_sources()
         registered = {s.get("name") for s in cfg.get("sources", []) if s.get("name")}
         raw_items, rss_errors, feed_counts = rss.collect_feeds(cfg, rss_fetcher)
+        freshness = feed_freshness(raw_items)
         errors.extend(rss_errors)
         kept, dropped = filter_rss_records(raw_items, keywords)
         records.extend(kept)
@@ -334,7 +372,7 @@ def collect(
                 source_ok += 1
 
     health = update_feed_health(feed_counts) if (track_health and feed_counts) else {}
-    coverage = build_coverage(records, feed_counts, registered, health)
+    coverage = build_coverage(records, feed_counts, registered, health, freshness)
     coverage["source_tried"] = source_tried
     coverage["source_ok"] = source_ok
     return records, errors, coverage
@@ -379,7 +417,9 @@ def run(
     print(f"[s1] collected {n} raw records → {out_path}")
     print(f"[s1] 소스별 {coverage['by_source']} · 피드 {coverage['feed_counts']}")
     if coverage["dead_feeds"]:
-        print(f"[s1] ⚠️ 죽은 피드 의심: {coverage['dead_feeds']}")
+        print(f"[s1] ⚠️ 죽은 피드 의심(0건): {coverage['dead_feeds']}")
+    if coverage["stale_feeds"]:
+        print(f"[s1] ⚠️ 정체된 피드(최신 기사 경과일): {coverage['stale_feeds']}")
     if coverage["unregistered_outlets"]:
         print(f"[s1] ℹ️ RSS 미등록 매체 후보: {list(coverage['unregistered_outlets'])[:5]}")
     if errors:

@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 import pytest
 
@@ -293,6 +294,96 @@ def test_report_shows_coverage_lines():
     assert "가나일보: 3건" in text
     assert "죽은 피드 의심" in text and "silent" in text
     assert "RSS 미등록 매체 후보" in text and "미등록타임스" in text
+
+
+# ── ⑦-b 정체된 피드 (실제 전자신문 응답에서 발견한 고장 모드) ─────────────
+#
+# 2026-09-01 https://rss.etnews.com/06064.xml (전자>소재) 실호출 결과:
+#   200 text/xml · item 50건 · 파싱 정상 — 그런데 최신 기사가 2026-06-25(68일 전).
+#   건수 기반 '죽은 피드' 감시로는 영원히 안 잡힌다. 아래가 그 재현이다.
+
+# 실제 응답의 구조를 그대로 옮긴 축약본 (channel <image> 블록 · CDATA · 단일자릿수 일자)
+ETNEWS_STALE = """<?xml version="1.0" encoding="utf-8" ?>
+<!-- LAST UPDATED AT 2026-06-26 06:33:03 -->
+<rss version="2.0"><channel>
+  <title><![CDATA[전자 - 소재 - 전자신문]]></title>
+  <link>https://www.etnews.com</link>
+  <pubDate>Fri, 26 Jun 2026 06:33:03 +0900</pubDate>
+  <image>
+    <title><![CDATA[전자 - 소재 - 전자신문]]></title>
+    <url>https://img.etnews.com/2020/etnews/images/logo_et.png</url>
+    <link>https://www.etnews.com</link>
+    <description></description>
+  </image>        <item>
+    <title><![CDATA[이녹스리튬-정석케미칼, 전고체 배터리 핵심소재 개발 협력]]></title>
+    <link>https://www.etnews.com/20260625000259</link>
+    <description><![CDATA[황화리튬(Li\u2082S)은 차세대 전고체 배터리의 핵심 원료다.]]></description>
+    <guid>20260625000259</guid>
+    <pubDate>Thu, 25 Jun 2026 13:56:02 +0900</pubDate>
+  </item>        <item>
+    <title><![CDATA[동화일렉트로라이트, 건식 기반 음극 소재 개발 국책과제 주관사 선정]]></title>
+    <link>https://www.etnews.com/20260624000084</link>
+    <description><![CDATA[건식 기반 음극 전극 소재 기술 개발 국책과제 주관 기관으로 선정됐다.]]></description>
+    <guid>20260624000084</guid>
+    <pubDate>Wed, 24 Jun 2026 10:06:33 +0900</pubDate>
+  </item>	</channel>
+</rss>"""
+
+ETNEWS_SRC = {"id": "etnews-material", "name": "전자신문", "lang": "ko",
+              "url": "https://rss.etnews.com/06064.xml", "enabled": True}
+
+
+def test_channel_image_block_is_not_an_item():
+    """실제 전자신문 피드는 channel 안에 <image><title><link> 를 둔다.
+
+    이걸 item 으로 오인하면 매 실행마다 가짜 기사가 1건씩 섞인다.
+    """
+    items = rss.parse_items(ETNEWS_STALE.encode("utf-8"), ETNEWS_SRC)
+    assert len(items) == 2
+    assert all("etnews.com/2026" in i["url"] for i in items)
+    assert not any("logo_et.png" in (i["url"] or "") for i in items)
+
+
+def test_single_digit_day_rfc822_parses():
+    """전자신문 pubDate 는 일자가 한 자리다 — 'Tue, 1 Sep 2026'."""
+    assert rss.parse_date_any("Tue, 1 Sep 2026 16:03:19 +0900") == "2026-09-01T16:03:19+09:00"
+
+
+def test_feed_with_no_category_still_filters(keywords):
+    """전자신문 피드에는 <category> 가 아예 없다 → 제목·설명만으로 걸러져야 한다.
+
+    ★실호출에서 드러난 커버리지 구멍을 함께 고정한다★
+    '동화일렉트로라이트, 건식 기반 음극 소재…' 는 퓨처엠 주력(음극재) 기사인데 탈락한다.
+    keywords.yaml battery/tech 의 must 가 '건식전극'·'실리콘음극' 이라 띄어쓴 '건식 기반 음극'
+    과 매칭되지 않기 때문이다. 사전을 넓히면 이 테스트가 깨지면서 변화가 드러난다.
+    """
+    items = rss.parse_items(ETNEWS_STALE.encode("utf-8"), ETNEWS_SRC)
+    assert all(i["categories"] == [] for i in items)
+    kept, dropped = s1_collect.filter_rss_records(items, keywords)
+    assert [k["title"][:5] for k in kept] == ["이녹스리튬"]     # 전고체 → battery/tech
+    assert kept[0]["track"] == "battery"
+    assert dropped == 1                                        # ← 음극재 기사 탈락(구멍)
+
+
+def test_stale_feed_detected_even_though_items_are_plenty():
+    """★건수는 정상인데 내용이 낡은 피드★ — 죽은 피드 감시로는 안 잡힌다."""
+    items = rss.parse_items(ETNEWS_STALE.encode("utf-8"), ETNEWS_SRC)
+    fresh = s1_collect.feed_freshness(items)
+    now = datetime(2026, 9, 1, 16, 0, tzinfo=common.KST)
+    stale = s1_collect.stale_feeds(fresh, now=now)
+    assert stale == {"etnews-material": 68}
+
+    cov = s1_collect.build_coverage(items, {"etnews-material": len(items)},
+                                    {"전자신문"}, {}, fresh)
+    assert cov["dead_feeds"] == []          # ← 0건이 아니라서 여기엔 안 걸린다
+    assert cov["stale_feeds"]["etnews-material"] == 68
+    text = "\n".join(orch.coverage_lines(cov))
+    assert "정체된 피드" in text and "68일 경과" in text
+
+
+def test_fresh_feed_is_not_flagged_stale():
+    fresh = {"a-ilbo": common.now_kst().isoformat()}
+    assert s1_collect.stale_feeds(fresh) == {}
 
 
 # ── ⑧ 네이버 HUB 는 기본 비활성 ─────────────────────────────────────────────
