@@ -25,7 +25,8 @@ pipeline/
   stages/
     common.py          canonical URL·기사 id·JSONL IO·KST (공통)
     relevance.py       posco_relevance L0 결정론 규칙 (카톡 게이트, LLM 미사용)
-    s1_collect.py      [P1] 수집 — 네이버 API + 구글 뉴스 RSS
+    rss.py             [P1] RSS 정규화 계층 (매체별 포맷 편차 흡수)
+    s1_collect.py      [P1] 수집 — 언론사 RSS(1순위) + 구글 뉴스 RSS(2순위)
     s2_normalize.py    [P1] 정규화·dedup·prescore·상한·게이트 1차
 scripts/
   smoke_collect.py     [Z2] 실데이터 스모크 — s1_collect 실응답 검증
@@ -100,29 +101,26 @@ python -m pipeline.stages.s2_normalize --run-id <run_id> # 정규화 → raw/<ru
 
 ## 실데이터 스모크 (Z2 외부망 PC에서 실행)
 
-합성 fixture 로는 검증 못 하는 **실제 네이버/구글 응답의 필드 매핑·인코딩·페이징**을
-P2 착수 전에 확인한다.
+합성 피드로는 검증 못 하는 **매체별 RSS 포맷 편차**(날짜 포맷·description 유무·
+CDATA/HTML 태그·인코딩·링크 형태)를 확인한다. 상세 절차는 `docs/Z2-RUNBOOK.md` ②.
 
 ```bash
-# 1) 네이버 검색 API 키 설정 (없으면 구글 RSS 만으로 fail-soft 동작)
-cp .env.example .env
-#   .env 에 NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 입력
-#   발급: https://developers.naver.com/apps  (검색 > 뉴스)
+# 1) pipeline/rss_sources.yaml 에 실제 언론사 RSS 주소를 채운다 (수집 키는 필요 없다)
 
-# 2) 스모크 실행 — 기본: posco/futurem, 최근 24시간
+# 2) 스모크 실행 — 활성 피드 전체, 최근 24시간
 python -m scripts.smoke_collect
-#   옵션: --track battery --category cell-kr --hours 48 --no-naver --max-queries N
+#   옵션: --feed <피드id>  --hours 48  --with-google  --max-queries N
 ```
 
 출력:
-- **stdout 리포트** — 수집 건수, 소스별 분포, 24h 이내 건수, 필드 누락, 필수필드 결손,
-  인코딩 이상(U+FFFD·미복원 엔티티·제어문자·NFC 불일치), 중복 canonical 군, fail-soft 오류.
-  필수필드 결손·인코딩 이상이 0 이면 `판정: PASS`.
-- `tests/fixtures/collect_<track>_<category>.sample.json` — **커밋 대상**.
+- **stdout 리포트** — ★매체별 파싱 편차 표★(건수·날짜 파싱 실패·설명 결손·링크 결손·
+  분류 결손·텍스트 이상), 키워드 통과율, 중복 canonical 군, RSS 미등록 매체 후보,
+  fail-soft 오류. 원본>0 · 필수필드 결손 0 · 텍스트 이상 0 이면 `판정: PASS`.
+- `tests/fixtures/collect_rss_<feed>.sample.json` — **커밋 대상**.
   메타데이터(제목·URL·발행시각·매체·소스) + **200자 이내 발췌만** (INV-5: 본문 전문 금지).
-- `cache/smoke/raw-*.jsonl` — 원본 응답. `cache/` 는 `.gitignore` 라 **커밋되지 않는다**.
+- `cache/smoke/raw-rss-*.jsonl` — 원본 응답. `cache/` 는 `.gitignore` 라 **커밋되지 않는다**.
 
-> 리포트 결과(특히 필드 누락·인코딩 이상 유무)를 알려주면 그에 맞춰 P2(크롤링·요약)를 착수한다.
+> 리포트의 매체별 편차 표를 알려주면 그에 맞춰 정규화 계층(`rss.py`)을 보강한다.
 
 ## 착수 전 확인
 

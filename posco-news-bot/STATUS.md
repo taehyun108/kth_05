@@ -32,7 +32,8 @@
 pipeline/stages/
   common.py         canonical URL·기사 id·JSONL IO·KST
   relevance.py      posco_relevance L0 결정론 규칙(카톡 게이트, LLM 미사용)
-  s1_collect.py     [P1] 수집(네이버 fail-soft + 구글 RSS, 트랙 언어)
+  rss.py            [P1] ★RSS 정규화 계층★ — 매체별 포맷 편차 흡수(날짜·설명·CDATA·Atom)
+  s1_collect.py     [P1] 수집 — 언론사 RSS(1순위)+구글 RSS(2순위)+커버리지, 네이버HUB 비활성
   s2_normalize.py   [P1] dedup·prescore·상한·트랙/게이트 1차
   s3_fetch.py       [P2] 크롤러 ★자리표시자(스킵)★ — Z2 스모크 후 구현
   s4_analyze.py     [P2 L0] 규칙 태깅 + 추출 요약
@@ -42,11 +43,12 @@ pipeline/stages/
   kakao_format.py   [P4] validate_kakao/validate_body (고정 포맷·존댓말)
   s7_dispatch.py    [P4] 카톡 라우터·안전장치·어댑터
   s7_mail.py        [P5c] 일일 브리핑 메일 Part A/B
-pipeline/orchestrator.py   [P7] DAG S0~S8, state/run-*.json, --resume/--only
+pipeline/rss_sources.yaml  ★언론사 RSS 정의★ — Z2에서 실주소를 채운다(현재 예시 3건)
+pipeline/orchestrator.py   [P7] DAG S0~S8, state/run-*.json, --resume/--only, 커버리지 리포트
 lib/*.ts            [P3/P6/P8] 인증·API 레벨게이트·facets·card·ask(RAG)
 app/                Next.js — login·posco·policy·trade·swot·weekly·api/*
 scripts/
-  smoke_collect.py  [Z2] 실데이터 스모크 (→ RUNBOOK ②)
+  smoke_collect.py  [Z2] 실데이터 스모크 — 매체별 파싱 편차 (→ RUNBOOK ②)
   ab_summarize.py   [Z2] P0-5 A/B 요약 품질 (→ RUNBOOK ④)
   rehearsal.py      전 구간 리허설(합성 30건)
 tests/              pytest(파이프라인·INV) + tests/web(node --test)
@@ -58,7 +60,8 @@ tests/              pytest(파이프라인·INV) + tests/web(node --test)
 
 | 항목 | 막는 것 | 풀리면 할 일 |
 |---|---|---|
-| **s3_fetch 실크롤러** | Z2 스모크 결과(실응답 필드 매핑·인코딩·페이징 미검증) | 스모크 리포트 → trafilatura→readability→newspaper3k 구현 |
+| **`rss_sources.yaml` 실주소** | Z2에서 매체별 RSS 주소 확인 필요(현재 예시 3건·`verified:false`) | 주소 채우고 스모크로 파싱 편차 확인 → `verified: true` |
+| **s3_fetch 실크롤러** | Z2 스모크 결과(실응답 필드 매핑·인코딩 미검증) | 스모크 리포트 → trafilatura→readability→newspaper3k 구현 |
 | **L1 모델 확정** | P0-5 A/B 미실행(Ollama·실기사 20건 필요) | 포맷 통과율+사람 채점 → 모델·프롬프트 확정 |
 | **카톡 실발송** | 카카오 오픈채팅 API 승인 + L1 미확정(현재 전부 extractive→스킵) | 승인 후 `dispatch_routes.yaml`의 `room_id_env`만 채움 |
 | **P5d 법령** | 국가법령정보센터 Open API 인증키 | laws.json 엔티티 + law-analyst + 의견제출 D-14 알림 |
@@ -70,7 +73,8 @@ tests/              pytest(파이프라인·INV) + tests/web(node --test)
 
 ## 3. 다음에 할 일 (우선순위)
 
-1. **Z2 스모크 실행** → 리포트 확인 → `s3_fetch` 크롤러 착수. (`docs/Z2-RUNBOOK.md` ②③)
+0. **`pipeline/rss_sources.yaml` 에 실제 언론사 RSS 주소 입력** — 수집 소스가 RSS 1순위로 바뀌었다. 이게 비면 수집 자체가 안 돈다. (`docs/Z2-RUNBOOK.md` ②-1)
+1. **Z2 스모크 실행** → 매체별 파싱 편차 표 확인 → `rss.py` 보강 → `s3_fetch` 크롤러 착수. (RUNBOOK ②③)
 2. **P0-5 A/B 실행** → L1 모델 확정 → `OLLAMA_MODEL` 고정, 프롬프트 조정. (RUNBOOK ④⑤)
 3. 카카오 API 승인되면 `dispatch_routes.yaml` `kakao-team.enabled: true` + `KAKAO_OPENLINK_ID`. **먼저 섀도 운영 2주**(개인 채널) 후 단체방.
 4. 법령 인증키 오면 **P5d**(laws.json·law-analyst·의견제출 마감 알림 — 이 트랙에서 가장 실용적).
@@ -108,4 +112,27 @@ S7 발송     카톡 0(route disabled) · 메일 Part A 9 + Part B 12
 - **L1 미확정 → 카톡 실발송 0건**: L0 추출 요약은 반말이라 `validate_kakao` 통과 못 함(INV-10). L1(Ollama)이 존댓말 `kakao_summary`를 생성해야 카톡이 나간다. 그 전까지는 웹·메일만 발행(INV-6).
 - **테스트 실행**: `bash ci-guard.sh`(pytest+INV grep) / `npm run test:web` 또는 `node --test "tests/web/**/*.test.ts"`. 앱 빌드(`next build`)는 `npm install` 필요 → Z2/Vercel에서.
 - **상태 파일 격리**: 테스트는 `PNB_STATE_DIR`로 tmp 격리. 실 `pipeline/state/`·`data/*.json`은 `.gitignore`(시드는 `*.sample.json`만 추적).
+- **수집 커버리지는 리포트로만 보인다**: RSS는 등록한 매체만 본다. S8 리포트의 `죽은 피드 의심`·`RSS 미등록 매체 후보`를 주기적으로 볼 것. 안 보면 조용히 누락된다.
 - **INV 절대 완화 금지**: 특히 INV-3/6/7/8/10. 발송은 fail-closed, SWOT은 웹에서만, 카톡은 고정 포맷.
+
+---
+
+## 6. 변경 이력 — 수집 소스 재설계 (2026-09)
+
+**무엇이 바뀌었나:** 검색 API 기반 수집 → **언론사 RSS 직접 구독 1순위**.
+
+| 소스 | 판정 | 사유 |
+|---|---|---|
+| 네이버 검색 API | **탈락(어댑터만 비활성 보존)** | 2026-06 NAVER API HUB 이관, 2026-07-31 개발자센터 신규 신청 종료. 네이버클라우드 계정 + **결제수단 등록** 필요 → 쓰지 않기로 결정 |
+| 빅카인즈 Open API | **후보 제외** | 2025년 **유료 전환** + **기사 재배포 금지 조항** |
+| **언론사 RSS 직접 구독** | **1순위 채택** | 키 불요·원문 URL 직수신·중계링크 처리 불필요 |
+| 구글 뉴스 RSS | 2순위 보조 | 1순위가 못 잡는 매체 보강. 차단 시 fail-soft + 운영 알림 |
+
+**구조가 어떻게 달라졌나 (검색 API와 근본적으로 다르다)**
+- 질의가 아니라 **피드 전체를 받아 `keywords.yaml` 로 거른다.** (`filter_rss_records`)
+- 매체마다 포맷이 달라 **정규화 계층(`pipeline/stages/rss.py`)** 을 새로 뒀다 — RSS/Atom, 날짜 5종, description 폴백 체인, CDATA·태그·엔티티, `<link href>`, `category term`.
+- **등록한 매체만 보이는 것이 유일한 약점**이라 커버리지 감시를 붙였다: `coverage.json` + S8 리포트(매체별 건수·이번 실행 0건 피드·연속 0건 3회 이상 **죽은 피드 의심**·구글로만 잡힌 **RSS 미등록 매체 후보**).
+- 실패 정책: **피드별 fail-soft, 전 소스 실패 시에만 S1 `failed`.**
+- 네이버 경로는 **삭제하지 않고 HUB 방식 어댑터로 비활성 보존** — `naverapihub.apigw.ntruss.com` `/search/v1/news`, 헤더 `X-NCP-APIGW-API-KEY-ID`/`X-NCP-APIGW-API-KEY`. `NAVER_HUB_KEY_ID`/`NAVER_HUB_KEY` 를 채우면 그때 켜진다(비면 호출조차 안 함).
+
+**검증:** `tests/test_p1b_rss.py` 24건 — pubDate 3종+ISO/naive, description 없는 피드, CDATA 제목, Atom 폴백, 피드별 fail-soft, 전 소스 실패 신호, 커버리지·죽은 피드·미등록 매체, HUB 비활성, `rss_sources.yaml` 스키마.

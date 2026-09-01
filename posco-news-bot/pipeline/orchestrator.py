@@ -83,15 +83,28 @@ def _s0_preflight(ctx: StageContext) -> StageResult:
 def _s1_collect(ctx: StageContext) -> StageResult:
     res = s1_collect.run(
         run_id=ctx.run_id, base_dir=ctx.base_dir,
-        use_naver=ctx.params.get("use_naver", True),
+        use_rss=ctx.params.get("use_rss", True),
+        use_google=ctx.params.get("use_google", True),
         max_queries=ctx.params.get("max_queries"),
     )
     recs = res.get("records", [])
     errs = res.get("errors", [])
-    # 0건이어도(네트워크 없음) 중단하지 않는다 — partial 로 계속(하류가 빈 입력 처리)
+    cov = res.get("coverage", {})
+    # 커버리지는 S8 리포트가 읽는다 — 매체별 건수·죽은 피드·미등록 매체 후보
+    ctx.state["coverage"] = cov
+
+    # 개별 피드 실패는 fail-soft. ★전 소스 실패면 failed★ (수집 자체가 성립 안 함)
+    if cov.get("source_tried", 0) and not cov.get("source_ok", 0):
+        return StageResult("S1", "failed", output_count=len(recs), errors=errs,
+                           note="전 소스 실패 — 네트워크/차단 의심")
+    # 0건이어도(피드는 살아있으나 키워드 미통과) 중단하지 않는다 — 하류가 빈 입력 처리
     status: Status = "partial" if errs or not recs else "success"
-    return StageResult("S1", status, output_count=len(recs), errors=errs,
-                       artifacts=[str(ctx.base_dir / ctx.run_id / "collected.jsonl")])
+    note = ""
+    if cov.get("dead_feeds"):
+        note = f"죽은 피드 의심 {len(cov['dead_feeds'])}건"
+    return StageResult("S1", status, output_count=len(recs), errors=errs, note=note,
+                       artifacts=[str(ctx.base_dir / ctx.run_id / "collected.jsonl"),
+                                  str(ctx.base_dir / ctx.run_id / "coverage.json")])
 
 
 def _s2_normalize(ctx: StageContext) -> StageResult:
@@ -231,9 +244,7 @@ def build_default_dag() -> list[Stage]:
 # ── 상태 파일 ────────────────────────────────────────────────────────────────
 
 def state_dir() -> Path:
-    # PNB_STATE_DIR 로 재정의 가능(테스트는 tmp 로 격리, 운영은 기본 pipeline/state)
-    d = os.environ.get("PNB_STATE_DIR")
-    return Path(d) if d else common.ROOT / "pipeline" / "state"
+    return common.state_dir()      # 단일 소스 (common)
 
 
 def state_path(run_id: str) -> Path:
@@ -316,6 +327,43 @@ def _accumulate_cost(state: dict[str, Any], res: StageResult) -> None:
     tot["usd"] = round(tot.get("usd", 0.0) + res.cost.get("usd", 0.0), 4)
 
 
+def coverage_lines(cov: dict[str, Any], top: int = 10) -> list[str]:
+    """수집 커버리지 리포트 — 매체별 건수 · 죽은 피드 · RSS 미등록 매체 후보.
+
+    RSS 는 등록한 매체만 본다. 누락은 조용히 일어나므로 리포트에서만 드러난다.
+    """
+    if not cov:
+        return []
+    lines = ["", "  ── 수집 커버리지 ──"]
+    by_source = cov.get("by_source") or {}
+    if by_source:
+        lines.append("  소스별: " + " · ".join(f"{k} {v}" for k, v in sorted(by_source.items())))
+    by_outlet = cov.get("by_outlet") or {}
+    if by_outlet:
+        head = list(by_outlet.items())[:top]
+        lines.append(f"  매체별({len(by_outlet)}개 매체, 상위 {len(head)}):")
+        for name, n in head:
+            lines.append(f"    - {name}: {n}건")
+        rest = len(by_outlet) - len(head)
+        if rest > 0:
+            lines.append(f"    … 외 {rest}개 매체")
+    zero_feeds = sorted(f for f, n in (cov.get("feed_counts") or {}).items() if n == 0)
+    if zero_feeds:
+        lines.append(f"  이번 실행 0건 피드: {', '.join(zero_feeds)}")
+    dead = cov.get("dead_feeds") or []
+    if dead:
+        lines.append(f"  ⚠️ 죽은 피드 의심(연속 0건): {', '.join(dead)} → rss_sources.yaml URL 확인")
+    unreg = cov.get("unregistered_outlets") or {}
+    if unreg:
+        head = list(unreg.items())[:top]
+        lines.append("  ℹ️ RSS 미등록 매체 후보(구글로만 잡힘): "
+                     + ", ".join(f"{k}({v})" for k, v in head))
+        lines.append("     → rss_sources.yaml 에 추가 검토")
+    if cov.get("source_tried") and not cov.get("source_ok"):
+        lines.append("  ⛔ 전 소스 실패 — 수집 미성립")
+    return lines
+
+
 def build_report(state: dict[str, Any]) -> str:
     stages = state.get("stages", {})
     lines = [f"[RUN {state['run_id']}] {state['mode']} · {state.get('status','?')}",
@@ -338,6 +386,7 @@ def build_report(state: dict[str, Any]) -> str:
         flag = "  ⚠️ 프롬프트 점검 권장" if corr > 0 else ""
         lines.append(f"  SWOT 축 교정: {corr}건 (L2 오배치를 규칙이 교정){flag}")
     lines.append(f"  발송 로그: {len(state.get('dispatch_log', []))}건 (멱등 판정 기준)")
+    lines.extend(coverage_lines(state.get("coverage") or {}))
     warnings = [f"{n}: {len(s.get('errors', []))} errors" for n, s in stages.items() if s.get("errors")]
     if warnings:
         lines.append("  ⚠️ " + " · ".join(warnings))

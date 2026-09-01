@@ -175,17 +175,45 @@ negative_patterns:
   - "증권가 소식"
 ```
 
-#### 4.1.6 소스별 수집 방식
+#### 4.1.6 소스별 수집 방식 (2026-09 재설계)
 
-| 소스 | 엔드포인트 | 쿼터 | 실패 대응 |
+| 순위 | 소스 | 방식 | 정의 위치 | 쿼터 | 실패 대응 |
+|---|---|---|---|---|---|
+| **1** | **언론사 RSS 직접 구독** | 매체 피드 전체 수신 → `keywords.yaml` 로 필터 | `pipeline/rss_sources.yaml` | 없음 | **피드별 fail-soft.** 전 소스 실패 시에만 S1 failed |
+| **2** | 구글 뉴스 RSS (국/영문) | `news.google.com/rss/search?q=&hl=ko&gl=KR&ceid=KR:ko` (영문 `hl=en&gl=US&ceid=US:en`) | `keywords.yaml` must | 비공식·무제한 | 1순위가 못 잡는 매체 보강용. 429/블록 시 fail-soft + 운영 알림 |
+| 1 | 정부/기관 RSS (T3/T4 원문) | 피드 전체 수신 | `rss_sources.yaml` (`source_type: gazette`) | — | 개별 실패 허용 |
+| (비활성) | 네이버 API HUB | `naverapihub.apigw.ntruss.com/search/v1/news`<br>헤더 `X-NCP-APIGW-API-KEY-ID` / `X-NCP-APIGW-API-KEY` | env | 유료 | env(`NAVER_HUB_KEY_ID`/`NAVER_HUB_KEY`) 없으면 **호출조차 하지 않음** |
+
+**검색 API 방식과의 근본 차이 — 질의가 아니라 피드다.**
+검색 API는 "키워드로 물어보는" 방식이라 등록 매체 개념이 없었지만, RSS는 **등록한 매체만 본다.**
+따라서 ⓐ 피드 전체를 받아 `must` 키워드(+`posco_entities`)로 거르고, ⓑ 커버리지 누락을 §4.1.7 로 감시한다.
+
+**정규화 계층 (`pipeline/stages/rss.py`) — 매체별 편차를 여기서 흡수한다.**
+
+| 편차 | 흡수 방법 |
+|---|---|
+| 포맷 | RSS 2.0 `<item>` → 없으면 Atom `<entry>` 폴백 |
+| 날짜 | RFC822(오프셋·GMT) → ISO8601(Z·오프셋) → 공백구분 naive(KST 가정) → 실패 시 `null` |
+| 설명 | `description` → `content:encoded` → `summary` → `atom:content` → `""` |
+| 제목·본문 | CDATA · HTML 태그 · HTML 엔티티 제거 |
+| 링크 | `<link>` 텍스트 → Atom `<link href=...>` |
+| 분류 | `<category>` 다중 → Atom `term=` |
+
+> ⚠️ **탈락한 소스** — 네이버 검색 API는 2026-06 NAVER API HUB 이관, 2026-07-31 개발자센터 신규 신청 종료로 네이버클라우드 결제수단이 필요해 사용하지 않는다(어댑터만 비활성 보존). 빅카인즈 Open API는 2025년 유료 전환 + **기사 재배포 금지 조항**으로 후보에서 제외한다.
+> ⚠️ 네이버 뉴스 페이지 직접 스크래핑은 약관/robots 이슈로 하지 않는다. 원문 URL은 언론사 RSS에서 그대로 오므로 `originallink`/중계링크 처리 로직 자체가 필요 없다.
+
+#### 4.1.7 커버리지 감시 (RSS 전환에 따른 필수 장치)
+
+RSS는 등록한 매체만 보므로 **누락이 조용히 일어난다.** 실행 리포트(S8)에서만 드러나게 한다.
+
+| 지표 | 산출 | 리포트 표기 | 조치 |
 |---|---|---|---|
-| 네이버 검색 API | `/v1/search/news.json` (`sort=date`, `display=100`) | 일 25,000 | 재시도 3회 → 스킵 + 알림 |
-| 구글 뉴스 RSS (국문) | `news.google.com/rss/search?q=&hl=ko&gl=KR&ceid=KR:ko` | 비공식·무제한 | **429/블록 시 T2·T3 해외분 손실** → §13-P1-3 |
-| 구글 뉴스 RSS (영문) | 동일, `hl=en&gl=US&ceid=US:en` | 동일 | 동일 |
-| Google CSE | Custom Search JSON API | 일 100 | 정밀 보강용 (선택) |
-| 정부/기관 RSS | 각 사이트 | — | 개별 실패 허용(fail-soft) |
+| 매체별 수집 건수 | `coverage.by_outlet` | `매체별(N개 매체, 상위 10)` | 특정 매체 급감 확인 |
+| 피드별 원본 건수 | `coverage.feed_counts` | `이번 실행 0건 피드` | URL·차단 점검 |
+| 죽은 피드 의심 | `state/feed_health.json` 의 연속 0건 ≥ 3회 | `⚠️ 죽은 피드 의심` | `rss_sources.yaml` URL 수정 |
+| RSS 미등록 매체 후보 | 구글로만 잡힌 매체 중 `rss_sources.yaml` 에 없는 것 | `ℹ️ RSS 미등록 매체 후보` | 피드 주소 찾아 등록 |
 
-> ⚠️ 네이버 뉴스 페이지 직접 스크래핑은 약관/robots 이슈가 있어 **검색 API 사용을 원칙**으로 한다. 본문은 §F-02와 같이 언론사 원문 URL에서 가져온다.
+산출물: `raw/<run_id>/coverage.json`
 
 ---
 
@@ -203,7 +231,7 @@ article_id = f"{date}-{sha1(canonical_url)[:10]}"
 ```
 
 - 원문 URL이 정본(canonical). 트래킹 파라미터(`utm_*`, `sid`, `ref`) 제거 후 해시
-- 같은 기사가 네이버·구글 양쪽에서 잡혀도 동일 id로 수렴
+- 같은 기사가 언론사 RSS·구글 양쪽에서 잡혀도 동일 id로 수렴
 - `title_slug`는 사람이 읽는 용도로 별도 필드에 보관 (URL 경로에는 `id` 사용)
 
 #### 4.2.2 중복 제거 3단계

@@ -1,0 +1,46 @@
+# 언론사 RSS 직접 구독 — ★1순위 수집 소스★ (docs/01-collect.md)
+#
+# 검색 API 와 방식이 다르다: 질의를 던지는 게 아니라 ★피드 전체를 받아서
+# keywords.yaml 기준으로 걸러낸다★. 따라서 매체를 등록한 만큼만 커버된다.
+# → 누락 감시는 S8 리포트의 '매체별 수집 건수 / 죽은 피드 / 미등록 매체 후보' 로 한다.
+#
+# ⚠️ 아래 url 은 ★예시 3건(플레이스홀더)★ 이다. Z2 에서 실제 주소를 확인해 채우고
+#    verified: true 로 바꾼다. verified:false 인 피드는 실패해도 경고 수준만 올린다.
+version: 1
+
+defaults:
+  timeout_sec: 15
+  max_items: 100          # 피드당 상한 (과다 피드 방어)
+  lang: ko
+
+sources:
+  - id: yonhap-economy
+    name: 연합뉴스
+    tier: 1                # outlet_tiers 와 별개로 피드 우선순위에 쓴다
+    section: economy
+    url: https://www.yna.co.kr/rss/economy.xml
+    lang: ko
+    enabled: true
+    verified: false        # ← Z2 에서 확인 후 true
+    notes: "경제 섹션. 통신사라 전재 원본이 많아 dedup 대표로 자주 선정된다."
+
+  - id: etnews-battery
+    name: 전자신문
+    tier: 2
+    section: battery
+    url: https://rss.etnews.com/Section902.xml
+    lang: ko
+    enabled: true
+    verified: false
+    notes: "이차전지·소재 섹션 추정. 실제 섹션 번호 확인 필요."
+
+  - id: federal-register-energy
+    name: Federal Register
+    tier: 1
+    section: policy
+    url: https://www.federalregister.gov/api/v1/documents.rss?conditions%5Bterm%5D=battery
+    lang: en
+    enabled: true
+    verified: false
+    source_type: gazette   # 관보 → policy_stage 판정의 강한 신호 (stagers.py)
+    notes: "T3 정책 원문. Proposed Rule/Final Rule 이 그대로 제목에 들어온다."

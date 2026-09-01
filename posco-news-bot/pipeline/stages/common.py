@@ -116,6 +116,13 @@ def now_kst() -> datetime:
     return datetime.now(KST)
 
 
+def state_dir() -> Path:
+    """상태 파일 위치. PNB_STATE_DIR 로 재정의 가능(테스트는 tmp 로 격리)."""
+    import os
+    d = os.environ.get("PNB_STATE_DIR")
+    return Path(d) if d else ROOT / "pipeline" / "state"
+
+
 def make_run_id(now: datetime | None = None) -> str:
     now = now or now_kst()
     return now.astimezone(KST).strftime("%Y%m%d-%H%M")
